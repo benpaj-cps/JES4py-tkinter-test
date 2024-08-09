@@ -14,6 +14,7 @@ from jes4py import FileChooser
 from jes4py.show2 import ShowProcess
 
 class Picture:
+
     filename = None
     title = None
     extension = ".jpg"
@@ -21,7 +22,7 @@ class Picture:
     tmpfilename = None
     process = None
     subprocessList = []
-    show_control_exit = bytes([0])
+    show_control_exit = 'exit'
     show_control_data = bytes([1])
     root = None
     imageQueue = None
@@ -767,7 +768,7 @@ class Picture:
         self.addMessage(text, xPos, yPos)
 
 #----------------------------------------------------------------------------
-# Show / Repaint using threading
+# Show / Repaint using multiprocessing
 #----------------------------------------------------------------------------
 
     def __saveInTempFile(self):
@@ -815,38 +816,32 @@ class Picture:
         # self.subprocessList.append(proc)
         # return proc
     
-    """ def __startSubprocess(self):
-
-        if self.process is None or not self.process.isAlive():
-            # a show process for this pic is not running, start a new one
-            self.process = Process(target=self.__runShowProcess,
-                                    args = (self.showImageQueue,))
-            self.showImageQueue = SimpleQueue()
-            self.process.start()
+    def __runSubprocess(self):
+        process = ShowProcess(self.imageQueue)
 
         # Register atexit handler if this is the first subprocess
         if len(self.subprocessList) == 0:
             atexit.register(self.__stopAllSubprocesses)
 
         # Record the process and return
+        self.subprocessList.append(process)
+        return process
+        
 
-        self.subprocessList.append(proc)
-        return proc """
-
-    # def __stopAllSubprocesses(self):
-        # """Close windows (i.e. terminate subprocess)
-        # """
-        # for proc in self.subprocessList:
-        #     try:
-        #         #self.process.stdin.write(self.show_control_exit)
-        #         self.sock.sendall(self.show_control_exit) #JRSSOCK
-        #         self.process.stdin.flush()
-        #         self.process.stdin.close()
-        #         self.sock.close()
-        #         proc.terminate()
-        #         proc.wait(timeout=0.2)
-        #     except: # BrokenPipeError, OSError:
-        #         pass
+    def __stopAllSubprocesses(self):
+        """Close windows (i.e. terminate subprocess)
+        """
+        for proc in self.subprocessList:
+            try:
+                #self.process.stdin.write(self.show_control_exit)
+                self.imageQueue.put(self.show_control_exit)
+                # self.process.stdin.flush()
+                # self.process.stdin.close()
+                proc.join(timeout=0.2)
+                proc.terminate()
+                proc.wait(timeout=0.2)
+            except: # BrokenPipeError, OSError:
+                pass
 
     def __sendPickledPicture(self):
         """Send pickled self object to "show" process
@@ -898,9 +893,13 @@ class Picture:
         #     self.port = int(self.process.stdout.readline().decode()) #JRSSOCK
         #     self.__establishConnection()
         # self.__sendPickledPicture()
+            
         if self.process is None or not self.process.is_alive():
+            # a show process for this pic is not running, start a new one:
+            # Reset the image queue
             self.imageQueue = SimpleQueue()
-            self.process = ShowProcess(self.imageQueue)
+            # Start new process
+            self.process = self.__runSubprocess()
         self.__sendPictureToQueue()
 
     def repaint(self):
