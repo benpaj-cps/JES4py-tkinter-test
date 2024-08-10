@@ -89,59 +89,76 @@ class App():
                 logger('not an image - exit code')
                 #self.root.destroy()
                 return
-            try:
-                logger('must be an image')
-                self.root.title(picture.getTitle())
-                image = ImageTk.PhotoImage(picture.getImage())
-                self.canvas.config(width=picture.getWidth(),
-                                   height=picture.getHeight())        
-                if imageID is None:
-                    logger('showing a new image')
-                    imageID = self.canvas.create_image(0, 0, anchor=tk.NW,
-                                                       image=image)
-                else:
-                    logger('repainting exisiting image')
-                    self.canvas.itemconfig(imageID, image=image)
-            except AttributeError:
-                logger('Attribute Error encountered')
-                #pass
 
-    def stopBackground(self, event, thread):
-        """Handle Python exiting"""
-        event.set()
-        self.imageQueue.put(self.ExitCode)
-        try:
-            self.client.close()
-        except:
-            pass
-        try:
-            self.sock.close()
-        except:
-            pass
-        #thread.join()
-        logger('stopBackground: Exit')
-        exit()
-    
-    def windowClosed(self):
-        """Handle GUI window close event"""
-        logger('windowClosed')
-        self.imageQueue.put(self.ExitCode)  # Signal stop to showImage thread
-        #self.listenThread.join()
-        #self.listenThread._stop()
-        try:
-            self.client.close()
-        except:
-            pass
-        try:
-            self.sock.close()
-        except:
-            pass
-        try:
-            self.root.destroy()
-            del self.root
-        except AttributeError:
-            pass
-        exit()
+class MainWindow(wx.Frame):
+    """Window class for show program
+    """
+
+    def __init__(self, parent):
+        """Initializer for MainWindow
+
+        Parameters
+        ----------
+        parent : wxFrame
+            the parent frame
+        """
+        super(MainWindow, self).__init__(parent=parent)
+
+        # Set up listener for data coming in over pipe
+        self.Connect(-1, -1, wx.ID_ANY, self.OnMessage)
+        self.worker = Listener(self)
+
+        # Create panel for displayed window
+        self.panel = wx.Panel(parent=self)
+        self.sizer = wx.BoxSizer(wx.VERTICAL)
+        self.sizer.Add(self.panel, 0, wx.ALIGN_LEFT|wx.ALIGN_TOP|wx.ALL, 0)
+        self.SetSizerAndFit(self.sizer)
+
+    def OnMessage(self, event):
+        """Handle received message
+
+        Parameters
+        ----------
+        event : wx.Event
+            the event object
+
+        event.data is either None (to indicate request to terminate program)
+        or a pickled Picture object
+        """
+        if event.data is None:
+            # all done
+            self.Close()
+        else:
+            # unpickle data and update displayed image
+            picture = pickle.loads(event.data)
+            self.updateBitmap(picture)
+
+    def updateBitmap(self, picture):
+        """Update bitmap of displayed image
+
+        Parameters
+        ----------
+        picture : Picture object
+            picture to display
+        """
+        image = picture.getWxImage()
+        imageSize = image.GetSize()
+        bmp = wx.Bitmap(image)
+        self.SetTitle(picture.getTitle())
+        self.bitmap = wx.StaticBitmap(parent=self.panel, size=imageSize, \
+                                        bitmap=bmp)
+        self.SetClientSize(imageSize)
+        self.Refresh()
+
+# ===========================================================================
+# Main program
+# ===========================================================================
+
+def main(argv):
+    app = wx.App(False)
+    frame = MainWindow(parent=None)
+    frame.Show()
+    app.MainLoop()
 
 if __name__ == '__main__':
     app = App()

@@ -5,10 +5,10 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="jes4py",
-    version="0.1.4",
+    version="0.1.7",
     author="Jonathan Senning",
     author_email="jonathan.senning@gordon.edu",
-    description="Python 3.x package providing a subset of JES's media functionality",
+    description="Python 3 package providing a subset of JES's media functionality",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/gordon-cs/JES4py",
@@ -18,7 +18,7 @@ setuptools.setup(
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=3.0.0',install_requires=[
+    python_requires='>=3.6.0',install_requires=[
         'wave',
         'wxPython',
         'simpleaudio'
