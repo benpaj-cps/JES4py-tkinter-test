@@ -808,15 +808,15 @@ class Picture:
     def __stopAllSubprocesses(self):
         """Close windows (i.e. terminate subprocess)
         """
-        self.imageQueue.put(self.SHOW_CONTROL_EXIT)
-
         for proc in self.exploreProcessList:
             try:
                 """ proc.stdin.write(self.EXPLORE_CONTROL_EXIT)
                 proc.stdin.flush()
                 proc.stdin.close() """
+                proc.exit()
+                proc.join(timeout=0.2)
                 proc.terminate()
-                proc.wait(timeout=0.2)
+                proc.join(timeout=0.2)
             except: # BrokenPipeError, OSError:
                 pass
 
