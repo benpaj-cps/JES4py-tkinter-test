@@ -8,7 +8,7 @@ import PIL.ImageDraw, PIL.Image, PIL.ImageTk
 from jes4py import Config
 from jes4py.PixelColor import Pixel, Color
 from jes4py import FileChooser
-from jes4py.show2 import ShowProcess
+from jes4py.show import ShowProcess
 from jes4py.pictureTool import ExploreProcess
 
 class Picture:
