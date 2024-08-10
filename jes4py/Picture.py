@@ -63,6 +63,7 @@ class Picture:
             size = (int(args[0]), int(args[1]))
             c = Color(255,255,255) if len(args) == 2 else args[2]
             self.image = PIL.Image.new("RGB", size, c.color)
+            self.title = 'Picture'
         else:
             print("Could not construct Picture object")
 
