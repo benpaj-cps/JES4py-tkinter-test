@@ -19,7 +19,7 @@ class Picture:
     tmpfilename = None
     showProcess = None
     imageQueue = None
-    exploreProcessList = []
+    subprocessList = []
     SHOW_CONTROL_EXIT = 'exit'
     EXPLORE_CONTROL_EXIT = bytes([0])
     root = None
@@ -787,28 +787,21 @@ class Picture:
 
     def __runShowProcess(self):
         process = ShowProcess(self.imageQueue)
-        # self.__registerSubprocess(process)
-        
-        # Register atexit handler if this is the first subprocess
-        if len(self.exploreProcessList) == 0:
-            atexit.register(self.__stopAllSubprocesses)
-
-        # Record the process
-        self.exploreProcessList.append(process)
+        self.__registerSubprocess(process)
         return process
         
     def __registerSubprocess(self, process):
         # Register atexit handler if this is the first subprocess
-        if len(self.exploreProcessList) == 0:
+        if len(self.subprocessList) == 0:
             atexit.register(self.__stopAllSubprocesses)
 
         # Record the process
-        self.exploreProcessList.append(process)
+        self.subprocessList.append(process)
 
     def __stopAllSubprocesses(self):
         """Close windows (i.e. terminate subprocess)
         """
-        for proc in self.exploreProcessList:
+        for proc in self.subprocessList:
             try:
                 """ proc.stdin.write(self.EXPLORE_CONTROL_EXIT)
                 proc.stdin.flush()
