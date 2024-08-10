@@ -1,10 +1,7 @@
 import os, sys
 import tkinter as tk
 import atexit
-import socket #JRSSOCK
-import subprocess, tempfile, pickle
-from subprocess import PIPE
-from threading import Thread, Event
+import tempfile
 from multiprocessing import Process, SimpleQueue
 from queue import Empty, Full
 import PIL.ImageDraw, PIL.Image, PIL.ImageTk
@@ -20,12 +17,12 @@ class Picture:
     extension = ".jpg"
     _PictureIndexOffset = 0
     tmpfilename = None
-    process = None
-    subprocessList = []
-    show_control_exit = 'exit'
-    show_control_data = bytes([1])
-    root = None
+    showProcess = None
     imageQueue = None
+    exploreProcessList = []
+    SHOW_CONTROL_EXIT = 'exit'
+    EXPLORE_CONTROL_EXIT = bytes([0])
+    root = None
 
     def __init__(self, *args, **kwargs):
         """Initializer for Picture class
@@ -787,135 +784,70 @@ class Picture:
         self.write(filename)
         return filename
 
-    def __runScript(self, script, *argv):
-        """Run a Python script in a subprocess
-
-        Parameters
-        ----------
-        script : str
-            the script to run; must be in the jes4py directory
-        *argv : list
-            parameters to pass to script on command line
-
-        Returns
-        -------
-        Popen instance
-        """
-        # # Start subprocess using current Python intepreter to run a script
-        # scriptpath = os.path.join(Config.getConfigVal("CONFIG_JES4PY_PATH"),
-        #         script)
-        # proc = subprocess.Popen([sys.executable, scriptpath] + list(argv),
-        #         stdin=PIPE, stdout=PIPE) #JRSSOCK added stdout
-
-        # # Register atexit handler if this is the first subprocess
-        # if len(self.subprocessList) == 0:
-        #     atexit.register(self.__stopAllSubprocesses)
-
-        # # Record the process and return
-
-        # self.subprocessList.append(proc)
-        # return proc
-    
-    def __runSubprocess(self):
+    def __runShowProcess(self):
         process = ShowProcess(self.imageQueue)
-
+        # self.__registerSubprocess(process)
+        
         # Register atexit handler if this is the first subprocess
-        if len(self.subprocessList) == 0:
+        if len(self.exploreProcessList) == 0:
             atexit.register(self.__stopAllSubprocesses)
 
-        # Record the process and return
-        self.subprocessList.append(process)
+        # Record the process
+        self.exploreProcessList.append(process)
         return process
         
+    def __registerSubprocess(self, process):
+        # Register atexit handler if this is the first subprocess
+        if len(self.exploreProcessList) == 0:
+            atexit.register(self.__stopAllSubprocesses)
+
+        # Record the process
+        self.exploreProcessList.append(process)
 
     def __stopAllSubprocesses(self):
         """Close windows (i.e. terminate subprocess)
         """
-        for proc in self.subprocessList:
+        self.imageQueue.put(self.SHOW_CONTROL_EXIT)
+
+        for proc in self.exploreProcessList:
             try:
-                #self.process.stdin.write(self.show_control_exit)
-                self.imageQueue.put(self.show_control_exit)
-                # self.process.stdin.flush()
-                # self.process.stdin.close()
-                proc.join(timeout=0.2)
+                """ proc.stdin.write(self.EXPLORE_CONTROL_EXIT)
+                proc.stdin.flush()
+                proc.stdin.close() """
                 proc.terminate()
                 proc.wait(timeout=0.2)
             except: # BrokenPipeError, OSError:
                 pass
 
-    def __sendPickledPicture(self):
-        """Send pickled self object to "show" process
-        """
-        pic = Picture(self)
-        pkg = pickle.dumps(pic)
-        pkgSize = len(pkg).to_bytes(8, byteorder='big')
-        #self.process.stdin.write(self.show_control_data)
-        numtries = 0
-        dataSent = False
-        while not dataSent and numtries < 25:
-            try:
-                self.sock.sendall(self.show_control_data) #JRSSOCK
-                dataSent = True
-            except BrokenPipeError:
-                self.__establishConnection()
-                numtries = numtries + 1
-                datSent = False
-                #print(f'Data send attempt {numtries} fail')
-        self.process.stdin.write(pkgSize)
-        self.process.stdin.write(pkg)
-        self.process.stdin.flush()
-
-    def __establishConnection(self):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        connected = False
-        numtries = 0
-        while not connected and numtries < 25:
-            try:
-                self.sock.connect(('localhost', self.port)) #JRSSOCK
-                connected = True
-            except ConnectionRefusedError:
-                numtries = numtries + 1
-                connected = False
-                #print(f'Connection attempt {numtries} failed')
-    
-    def __sendPictureToQueue(self):
+    def __sendToQueue(self):
         pic = Picture(self)
         self.imageQueue.put(pic)
 
     def show(self):
-        """Show a picture using stand-alone Python script
+        """Show a picture using subprocess
         """
-
-        # if self.process is None or self.process.poll() is not None:
-        #     # a show process for this pic is not running, start a new one
-        #     self.process = self.__runScript('show.py') #JRSSOCK
-        #     self.port = int(self.process.stdout.readline().decode()) #JRSSOCK
-        #     self.__establishConnection()
-        # self.__sendPickledPicture()
-            
-        if self.process is None or not self.process.is_alive():
+        if self.showProcess is None or not self.showProcess.is_alive():
             # a show process for this pic is not running, start a new one:
             # Reset the image queue
             self.imageQueue = SimpleQueue()
             # Start new process
-            self.process = self.__runSubprocess()
-        self.__sendPictureToQueue()
+            self.showProcess = self.__runShowProcess()
+        self.__sendToQueue()
 
     def repaint(self):
-        """Reshow a picture using stand-alone Python script
+        """Reshow a picture using subprocess
         """
-        if (self.process is not None) and self.process.poll() is None:
+        if (self.showProcess is not None) and self.showProcess.is_alive():
             # subprocess seems to be running, ask it to update image
             try:
-                self.__sendPickledPicture()
+                self.__sendToQueue()
             except: # BrokenPipeError:
                 # something went wrong, reset and call show
-                self.process = None
+                self.showProcess = None
                 self.show()
         else:
             # subprocess is not running, start a new one
-            self.process = None
+            self.showProcess = None
             self.show()
 
     def pictureTool(self):
