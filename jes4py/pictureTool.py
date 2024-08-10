@@ -34,9 +34,48 @@ Summer 2020 JES4py Team: Dr. Jonathan Senning
 
 import os
 import sys
+from multiprocessing import Process, SimpleQueue
+from threading import *
 import wx
 import wx.lib.scrolledpanel
 # import wx.lib.inspection
+
+class ExploreProcess(Process):
+
+    EXIT_CODE = bytes([0])
+
+    def __init__(self, imagePath, imageTitle=None):
+        Process.__init__(self)
+        self.commandQueue = SimpleQueue()
+        self.imagePath = imagePath
+        self.imageTitle = imageTitle if imageTitle else imagePath
+        self.start()
+    
+    def getCommandQueue(self):
+        return self.commandQueue
+
+    def run(self):
+        self.app = wx.App(False)
+        self.listenerThread = Thread(target=self.__listenForCommand,
+                                      daemon=True)
+        self.listenerThread.start()
+        self.frame = MainWindow(filename=self.imagePath,
+                                 parent=None, title=self.imageTitle)
+        self.frame.Show()
+        self.app.MainLoop()
+    
+    def exit(self):
+        self.commandQueue.put(self.EXIT_CODE)
+    
+    def __listenForCommand(self):
+        command = self.commandQueue.get()
+        
+        while command != self.EXIT_CODE:
+            print(f"Unknown command recieved by Explore process {self.pid}")
+            command = self.commandQueue.get()
+            
+        # Exit code recieved
+        self.frame.Close()
 
 class Cursor:
     width  = 7

@@ -9,6 +9,7 @@ from jes4py import Config
 from jes4py.PixelColor import Pixel, Color
 from jes4py import FileChooser
 from jes4py.show2 import ShowProcess
+from jes4py.pictureTool import ExploreProcess
 
 class Picture:
 
@@ -789,6 +790,11 @@ class Picture:
         process = ShowProcess(self.imageQueue)
         self.__registerSubprocess(process)
         return process
+    
+    def __runExploreProcess(self, filename):
+        process = ExploreProcess(filename, self.title)
+        self.__registerSubprocess(process)
+        return process
         
     def __registerSubprocess(self, process):
         # Register atexit handler if this is the first subprocess
@@ -848,4 +854,5 @@ class Picture:
         """Explore a picture using a stand-alone Python script
         """
         filename = self.__saveInTempFile()
-        self.__runScript('pictureTool.py', filename, self.title)
+        # self.__runScript('pictureTool.py', filename, self.title)
+        self.__runExploreProcess(filename)
