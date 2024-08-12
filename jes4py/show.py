@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
-import sys, pickle, atexit
+import sys, time, atexit
 import tkinter as tk
 from PIL import ImageTk
-from multiprocessing import Process, SimpleQueue
+from multiprocessing import Process, SimpleQueue, Pipe
 from queue import Empty, Full
 from threading import Thread, Event
 
@@ -14,13 +14,14 @@ def logger(message, logging=True):
         f.close()
 
 class ShowProcess(Process):
-    def __init__(self, imageQueue):
+    def __init__(self, imageQueue, commandPipe):
         Process.__init__(self)
         self.imageQueue = imageQueue
+        self.commandPipe = commandPipe
         self.start()
     
     def run(self):
-        self.app = ShowApp(self.imageQueue)
+        self.app = ShowApp(self.imageQueue, self.commandPipe)
     
     def exit(self):
         """Signal the process to exit
@@ -30,14 +31,17 @@ class ShowProcess(Process):
         the subprocess's main thread to exit.
         """
         self.imageQueue.put(ShowApp.EXIT_CODE)
+        # self.commandPipe.send(ShowApp.NOTIFY_EXIT)
 
 
 class ShowApp():
     EXIT_CODE = 'exit'
+    NOTIFY_EXIT = bytes([0])
 
-    def __init__(self, imageQueue):
+    def __init__(self, imageQueue, commandPipe):
         self.root = tk.Tk()
         self.imageQueue = imageQueue
+        self.commandPipe = commandPipe
         stopEvent = Event()
         self.showThread = Thread(target=self.showImages, args=(stopEvent,), daemon=True)
         self.showThread.start()
@@ -76,25 +80,78 @@ class ShowApp():
                     self.canvas.itemconfig(imageID, image=image)
             except AttributeError:
                 logger('Attribute Error encountered')
-                #pass
+                pass
+
+    def __notifyExit(self):
+        """Safely stop communication with main process
+        
+        Assumes the listener thread has already been stopped.
+        """
+        
+        # Tell main process that this subprocess is unusable
+        self.commandPipe.send(self.NOTIFY_EXIT)
+
+        # Safety interval, to handle the edge case of the main process
+        # not seeing the above message in time to stop sending images
+        time.sleep(0.001)
+
+        # If the main process tried to send anything, it would block
+        # until the message was consumed (by this subprocess).
+        # This loop ensures that any pending items are removed from the queue.
+        
+        try:
+            logger('notifyExit: checking queue')
+            empty = self.imageQueue.empty()
+        except OSError:
+            logger('notifyExit : nothing to clear in queue')
+            return
+        
+        while not empty:
+            try:
+                logger('notifyExit : trying to clear queue')
+                _ = self.imageQueue.get()
+                empty = self.imageQueue.empty()
+            except OSError:
+                logger('notifyExit: Error encountered')
+                return
+        # try:
+        #     logger('notifyExit : trying to clear queue')
+        #     while self.imageQueue.empty() == False:
+        #         _ = self.imageQueue.get()
+        # except OSError:
+        #     # Image queue has already been closed
+        #     logger('notifyExit: Error encountered')
+        #     pass
+        
+        # try:
+        #     self.imageQueue.close()
+        # except:
+        #     # SimpleQueue.close() was added in Python 3.9
+        #     pass
 
     def stopBackground(self, event, thread):
         """Handle Python exiting"""
-        event.set()
-        self.imageQueue.put(self.EXIT_CODE)
+        # self.showThread.join(timeout=1)
+        
+        # if self.showThread.is_alive:
+            # raise RuntimeError(f"Listener thread for show() failed to quit")
         logger('stopBackground: Exit')
         # exit()
     
     def onWindowClosed(self):
         """Handle GUI window close event"""
         logger('windowClosed')
-        self.imageQueue.put(self.EXIT_CODE)  # Signal stop to showImage thread
+        # Notify main process that subprocess is no longer usable
+        # self.commandPipe.send(ShowApp.NOTIFY_EXIT)
+        # self.root.destroy()
+        self.imageQueue.put(self.EXIT_CODE)
         # self.showThread.join()
-        #self.listenThread.join()
-        #self.listenThread._stop()
         # exit()
     
     def onListenerExit(self, *args):
         """Handle request from listener to exit process"""
-        self.root.quit()
+        logger('onListenerExit')
+        self.__notifyExit()
+        logger('notify complete')
+        self.root.destroy()
         exit()

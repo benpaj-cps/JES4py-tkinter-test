@@ -2,7 +2,8 @@ import os, sys
 import tkinter as tk
 import atexit
 import tempfile
-from multiprocessing import Process, SimpleQueue
+from multiprocessing import Process, SimpleQueue, Pipe
+from threading import Thread
 from queue import Empty, Full
 import PIL.ImageDraw, PIL.Image, PIL.ImageTk
 from jes4py import Config
@@ -12,18 +13,28 @@ from jes4py.show import ShowProcess
 from jes4py.pictureTool import ExploreProcess
 
 class Picture:
-
+    
+    # Picture data
     filename = None
     title = None
     extension = ".jpg"
     _PictureIndexOffset = 0
     tmpfilename = None
+    
+    # For subprocess picture display with show(), explore()
     showProcess = None
     imageQueue = None
     subprocessList = []
-    SHOW_CONTROL_EXIT = 'exit'
-    EXPLORE_CONTROL_EXIT = bytes([0])
-    root = None
+    showProcessId = None
+    # format: id(str): process:Process, listener:Thread, isActive:bool
+    subprocessDict = {}
+    
+    # Receipt of this message by a listener indicates
+    # that a subprocess has exited
+    SUBPROCESS_EXIT_SIGNAL = bytes([0])
+
+    # SHOW_CONTROL_EXIT = 'exit'
+    # EXPLORE_CONTROL_EXIT = bytes([0])
 
     def __init__(self, *args, **kwargs):
         """Initializer for Picture class
@@ -767,7 +778,7 @@ class Picture:
         self.addMessage(text, xPos, yPos)
 
 #----------------------------------------------------------------------------
-# Show / Repaint using multiprocessing
+# Show / Repaint using threading
 #----------------------------------------------------------------------------
 
     def __saveInTempFile(self):
@@ -784,8 +795,10 @@ class Picture:
         return filename
 
     def __runShowProcess(self):
-        process = ShowProcess(self.imageQueue)
-        self.__registerSubprocess(process)
+        mainConn, subConn = Pipe()
+        process = ShowProcess(self.imageQueue, subConn)
+        self.showProcessId = process.pid
+        self.__registerSubprocess(process, mainConn)
         return process
     
     def __runExploreProcess(self, filename):
@@ -793,28 +806,61 @@ class Picture:
         self.__registerSubprocess(process)
         return process
         
-    def __registerSubprocess(self, process):
+    def __registerSubprocess(self, process, connection):
         # Register atexit handler if this is the first subprocess
         if len(self.subprocessList) == 0:
             atexit.register(self.__stopAllSubprocesses)
 
         # Record the process
-        self.subprocessList.append(process)
+        # self.subprocessList.append(process)
+        pid = process.pid
+        listener = Thread(target=self.__listenForExit,
+                           args=(pid, connection,), daemon=True)
+        listener.start()
+        isActive = True
+        
+        self.subprocessDict[pid] = {'process': process, 'listener': listener,
+                                    'isActive': isActive}
+    
+    def __listenForExit(self, pid, connection):
+        while connection.recv() != self.SUBPROCESS_EXIT_SIGNAL:
+            print(f"Unknown signal received from subprocess {pid}")
+        
+        self.subprocessDict[pid]['isActive'] = False
+        if pid == self.showProcessId:
+            self.showProcessId = None
+        
+        # process = self.subprocessDict[pid]['process']
+        # process.join(timeout=5)
+        # if process.is_alive:
+        #     raise RuntimeError(f"Subprocess {pid} said it was exiting " +
+        #                         "but is still alive")
 
     def __stopAllSubprocesses(self):
         """Close windows (i.e. terminate subprocess)
         """
-        for proc in self.subprocessList:
-            try:
-                """ proc.stdin.write(self.EXPLORE_CONTROL_EXIT)
-                proc.stdin.flush()
-                proc.stdin.close() """
-                proc.exit()
-                proc.join(timeout=0.2)
-                proc.terminate()
-                proc.join(timeout=0.2)
-            except: # BrokenPipeError, OSError:
-                pass
+        # for proc in self.subprocessList:
+        #     try:
+        #         """ proc.stdin.write(self.EXPLORE_CONTROL_EXIT)
+        #         proc.stdin.flush()
+        #         proc.stdin.close() """
+        #         proc.exit()
+        #         proc.join(timeout=0.2)
+        #         proc.terminate()
+        #         proc.join(timeout=0.2)
+        #     except: # BrokenPipeError, OSError:
+        #         pass
+        for i in self.subprocessDict.values():
+            proc = i['process']
+            listener = i['listener']
+            # try: 
+            proc.exit()
+            listener.join()
+                # proc.join(timeout=0.2)
+                # proc.terminate()
+                # proc.join(timeout=0.2)
+            # except:
+                # pass
 
     def __sendToQueue(self):
         pic = Picture(self)
@@ -823,22 +869,28 @@ class Picture:
     def show(self):
         """Show a picture using subprocess
         """
-        if self.showProcess is None or not self.showProcess.is_alive():
+        # if self.showProcess is None or not self.showProcess.is_alive():
+        if self.showProcessId is None or not self.subprocessDict[self.showProcessId]['isAlive']:
             # a show process for this pic is not running, start a new one:
             # Reset the image queue
             self.imageQueue = SimpleQueue()
             # Start new process
             self.showProcess = self.__runShowProcess()
-        self.__sendToQueue()
+        
+        try:
+            self.__sendToQueue()
+        except:
+            print("Unable to show image")
 
     def repaint(self):
         """Reshow a picture using subprocess
         """
-        if (self.showProcess is not None) and self.showProcess.is_alive():
+        # if (self.showProcess is not None) and self.showProcess.is_alive():
+        if (self.showProcessId is not None) and self.subprocessDict[self.showProcessId]['isAlive']:
             # subprocess seems to be running, ask it to update image
             try:
                 self.__sendToQueue()
-            except: # BrokenPipeError:
+            except: # BrokenPipeError, queue.Full:
                 # something went wrong, reset and call show
                 self.showProcess = None
                 self.show()
