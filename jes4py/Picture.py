@@ -802,8 +802,9 @@ class Picture:
         return process
     
     def __runExploreProcess(self, filename):
-        process = ExploreProcess(filename, self.title)
-        self.__registerSubprocess(process)
+        mainConn, subConn = Pipe()
+        process = ExploreProcess(filename, self.title, subConn)
+        self.__registerSubprocess(process, mainConn)
         return process
         
     def __registerSubprocess(self, process, connection):
@@ -816,11 +817,12 @@ class Picture:
         pid = process.pid
         listener = Thread(target=self.__listenForExit,
                            args=(pid, connection,), daemon=True)
-        listener.start()
         isActive = True
         
         self.subprocessDict[pid] = {'process': process, 'listener': listener,
                                     'isActive': isActive}
+
+        listener.start()
     
     def __listenForExit(self, pid, connection):
         while connection.recv() != self.SUBPROCESS_EXIT_SIGNAL:
@@ -830,11 +832,14 @@ class Picture:
         if pid == self.showProcessId:
             self.showProcessId = None
         
-        # process = self.subprocessDict[pid]['process']
-        # process.join(timeout=5)
-        # if process.is_alive:
-        #     raise RuntimeError(f"Subprocess {pid} said it was exiting " +
-        #                         "but is still alive")
+        process = self.subprocessDict[pid]['process']
+        if process.is_alive():
+            process.join(timeout=5)
+        elif process.is_alive() == False:
+            raise RuntimeWarning(f"Would have joined dead process {pid}")
+        if process.is_alive():
+            raise RuntimeError(f"Subprocess {pid} said it was exiting " +
+                                "but is still alive")
 
     def __stopAllSubprocesses(self):
         """Close windows (i.e. terminate subprocess)
@@ -853,14 +858,8 @@ class Picture:
         for i in self.subprocessDict.values():
             proc = i['process']
             listener = i['listener']
-            # try: 
             proc.exit()
             listener.join()
-                # proc.join(timeout=0.2)
-                # proc.terminate()
-                # proc.join(timeout=0.2)
-            # except:
-                # pass
 
     def __sendToQueue(self):
         pic = Picture(self)
@@ -870,7 +869,7 @@ class Picture:
         """Show a picture using subprocess
         """
         # if self.showProcess is None or not self.showProcess.is_alive():
-        if self.showProcessId is None or not self.subprocessDict[self.showProcessId]['isAlive']:
+        if self.showProcessId is None or not self.subprocessDict[self.showProcessId]['isActive']:
             # a show process for this pic is not running, start a new one:
             # Reset the image queue
             self.imageQueue = SimpleQueue()
@@ -886,7 +885,7 @@ class Picture:
         """Reshow a picture using subprocess
         """
         # if (self.showProcess is not None) and self.showProcess.is_alive():
-        if (self.showProcessId is not None) and self.subprocessDict[self.showProcessId]['isAlive']:
+        if (self.showProcessId is not None) and self.subprocessDict[self.showProcessId]['isActive']:
             # subprocess seems to be running, ask it to update image
             try:
                 self.__sendToQueue()

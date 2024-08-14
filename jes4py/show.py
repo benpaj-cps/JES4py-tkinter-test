@@ -5,12 +5,12 @@ import tkinter as tk
 from PIL import ImageTk
 from multiprocessing import Process, SimpleQueue, Pipe
 from queue import Empty, Full
-from threading import Thread, Event
+from threading import Thread, Event, enumerate, current_thread
 
 def logger(message, logging=True):
     if logging:
         f = open('MULTITEST.log', 'a')
-        f.write(message + '\n')
+        f.write(time.ctime() + ': ' + message + '\n')
         f.close()
 
 class ShowProcess(Process):
@@ -19,9 +19,14 @@ class ShowProcess(Process):
         self.imageQueue = imageQueue
         self.commandPipe = commandPipe
         self.start()
-    
+
     def run(self):
+        logger(f"run(): Process {self.pid} has started")
         self.app = ShowApp(self.imageQueue, self.commandPipe)
+        del self.app
+        logger(f"run(): Process {self.pid} is exiting")
+        # exit(0)
+        return
     
     def exit(self):
         """Signal the process to exit
@@ -43,7 +48,7 @@ class ShowApp():
         self.imageQueue = imageQueue
         self.commandPipe = commandPipe
         stopEvent = Event()
-        self.showThread = Thread(target=self.showImages, args=(stopEvent,), daemon=True)
+        self.showThread = Thread(target=self.showImages, args=(stopEvent,), daemon=False)
         self.showThread.start()
         atexit.register(self.stopBackground, stopEvent, self.showThread)
         self.root.protocol("WM_DELETE_WINDOW", self.onWindowClosed)
@@ -56,15 +61,16 @@ class ShowApp():
         self.canvas.pack()
         imageID = None
         while not event.is_set():
+            logger('Getting potential image...')
             picture = self.imageQueue.get()
             logger('Possible image found on queue...')
             logger(f'  Type: {type(picture)}')
             logger(f'  Value: {picture}')
             if isinstance(picture, str) and picture == self.EXIT_CODE:
                 logger('not an image - exit code')
-                self.root.event_generate('<<ListenerExit>>')
-                #self.root.destroy()
-                return
+                self.root.event_generate('<<ListenerExit>>', when='head')
+                # self.root.event_generate('<<ListenerExit>>')
+                break
             try:
                 logger('must be an image')
                 self.root.title(picture.getTitle())
@@ -81,6 +87,9 @@ class ShowApp():
             except AttributeError:
                 logger('Attribute Error encountered')
                 pass
+        logger(f"showImages (thread {self.showThread.ident}): at end of function")
+        # return None
+        # exit()
 
     def __notifyExit(self):
         """Safely stop communication with main process
@@ -112,8 +121,10 @@ class ShowApp():
                 _ = self.imageQueue.get()
                 empty = self.imageQueue.empty()
             except OSError:
-                logger('notifyExit: Error encountered')
+                logger('notifyExit: OSError encountered')
                 return
+        
+        # del self.imageQueue
         # try:
         #     logger('notifyExit : trying to clear queue')
         #     while self.imageQueue.empty() == False:
@@ -131,11 +142,14 @@ class ShowApp():
 
     def stopBackground(self, event, thread):
         """Handle Python exiting"""
-        # self.showThread.join(timeout=1)
+        logger(f"stopBackground: threading.enumerate(): {enumerate()}")
+        logger(f'stopBackground: threading.current_thread: {current_thread()}')
+        self.showThread.join(timeout=6)
         
-        # if self.showThread.is_alive:
-            # raise RuntimeError(f"Listener thread for show() failed to quit")
-        logger('stopBackground: Exit')
+        if self.showThread.is_alive():
+            raise RuntimeError(f"Listener thread for show() failed to quit")
+        elif self.showThread.is_alive() == False:
+            logger(f'stopBackground: Listener thread for show ({self.showThread}) has stopped')
         # exit()
     
     def onWindowClosed(self):
@@ -150,8 +164,21 @@ class ShowApp():
     
     def onListenerExit(self, *args):
         """Handle request from listener to exit process"""
-        logger('onListenerExit')
+        logger(f'onListenerExit')
+        logger(f'onListenerExit: current thread is {current_thread()}')
         self.__notifyExit()
         logger('notify complete')
         self.root.destroy()
-        exit()
+        self.root.quit()
+        del self.root, self.canvas
+        # self.showThread.join()
+        # logger(f"onListenerExit: threading.enumerate(): {enumerate()}")
+
+        # if self.showThread.is_alive():
+        #     self.showThread.join(timeout=1)
+        
+        # if self.showThread.is_alive():
+        #     raise RuntimeError(f"Listener thread for show() failed to quit")
+        # elif self.showThread.is_alive() == False:
+        #     logger(f'stopBackground: Listener thread for show ({self.showThread}) has stopped')
+        # exit()

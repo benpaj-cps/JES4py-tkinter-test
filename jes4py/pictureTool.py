@@ -34,7 +34,7 @@ Summer 2020 JES4py Team: Dr. Jonathan Senning
 
 import os
 import sys
-from multiprocessing import Process, SimpleQueue
+from multiprocessing import Process, Queue
 from threading import *
 import wx
 import wx.lib.scrolledpanel
@@ -46,14 +46,11 @@ class ExploreProcess(Process):
 
     def __init__(self, imagePath, imageTitle=None):
         Process.__init__(self)
-        self.commandQueue = SimpleQueue()
+        self.commandQueue = Queue()
         self.imagePath = imagePath
         self.imageTitle = imageTitle if imageTitle else imagePath
         self.start()
     
-    def getCommandQueue(self):
-        return self.commandQueue
-
     def run(self):
         self.app = wx.App(False)
         self.listenerThread = Thread(target=self.__listenForCommand,
@@ -76,6 +73,10 @@ class ExploreProcess(Process):
             
         # Exit code recieved
         self.frame.Close()
+
+    def getQueue(self):
+        return self.commandQueue
+
 
 class Cursor:
     width  = 7
