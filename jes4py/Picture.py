@@ -35,6 +35,7 @@ class Picture:
 
     # SHOW_CONTROL_EXIT = 'exit'
     # EXPLORE_CONTROL_EXIT = bytes([0])
+    SUBPROCESS_CONTROL_EXIT = 'exit'
 
     def __init__(self, *args, **kwargs):
         """Initializer for Picture class
@@ -796,7 +797,7 @@ class Picture:
 
     def __runShowProcess(self):
         mainConn, subConn = Pipe()
-        process = ShowProcess(self.imageQueue, subConn)
+        process = ShowProcess(subConn)
         self.showProcessId = process.pid
         self.__registerSubprocess(process, mainConn)
         return process
@@ -816,28 +817,38 @@ class Picture:
         # self.subprocessList.append(process)
         pid = process.pid
         listener = Thread(target=self.__listenForExit,
-                           args=(pid, connection,), daemon=True)
+                           args=(pid,), daemon=True)
         isActive = True
         
-        self.subprocessDict[pid] = {'process': process, 'listener': listener,
+        self.subprocessDict[pid] = {'process': process,
+                                    'listener': listener,
+                                    'connection': connection,
                                     'isActive': isActive}
 
         listener.start()
     
-    def __listenForExit(self, pid, connection):
+    def __listenForExit(self, pid):
+        d = self.subprocessDict[pid]
+        process = d['process']
+        connection = d['connection']
+        
         while connection.recv() != self.SUBPROCESS_EXIT_SIGNAL:
             print(f"Unknown signal received from subprocess {pid}")
         
         self.subprocessDict[pid]['isActive'] = False
+        
         if pid == self.showProcessId:
             self.showProcessId = None
         
-        process = self.subprocessDict[pid]['process']
+        connection.send(self.SUBPROCESS_CONTROL_EXIT)
+        connection.close()
+
+        # process = self.subprocessDict[pid]['process']
         if process.is_alive():
             process.join(timeout=5)
         elif process.is_alive() == False:
             raise RuntimeWarning(f"Would have joined dead process {pid}")
-        if process.is_alive():
+        if process.is_alive() == True:
             raise RuntimeError(f"Subprocess {pid} said it was exiting " +
                                 "but is still alive")
 
@@ -856,14 +867,19 @@ class Picture:
         #     except: # BrokenPipeError, OSError:
         #         pass
         for i in self.subprocessDict.values():
-            proc = i['process']
+            process = i['process']
             listener = i['listener']
-            proc.exit()
+            process.exit()
+            # proc.exit()
+            # connection = i['connection']
+            # connection.send(self.SUBPROCESS_CONTROL_EXIT)
             listener.join()
+            process.join()
 
     def __sendToQueue(self):
         pic = Picture(self)
-        self.imageQueue.put(pic)
+        # self.imageQueue.put(pic)
+        self.subprocessDict[self.showProcessId]['connection'].send(pic)
 
     def show(self):
         """Show a picture using subprocess
