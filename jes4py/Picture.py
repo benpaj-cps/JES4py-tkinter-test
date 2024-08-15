@@ -33,10 +33,6 @@ class Picture:
     # that a subprocess has exited
     SUBPROCESS_EXIT_SIGNAL = bytes([0])
 
-    # SHOW_CONTROL_EXIT = 'exit'
-    # EXPLORE_CONTROL_EXIT = bytes([0])
-    SUBPROCESS_CONTROL_EXIT = 'exit'
-
     def __init__(self, *args, **kwargs):
         """Initializer for Picture class
         """
@@ -840,7 +836,7 @@ class Picture:
         if pid == self.showProcessId:
             self.showProcessId = None
         
-        connection.send(self.SUBPROCESS_CONTROL_EXIT)
+        connection.send(self.SUBPROCESS_EXIT_SIGNAL)
         connection.close()
 
         # process = self.subprocessDict[pid]['process']
@@ -855,26 +851,14 @@ class Picture:
     def __stopAllSubprocesses(self):
         """Close windows (i.e. terminate subprocess)
         """
-        # for proc in self.subprocessList:
-        #     try:
-        #         """ proc.stdin.write(self.EXPLORE_CONTROL_EXIT)
-        #         proc.stdin.flush()
-        #         proc.stdin.close() """
-        #         proc.exit()
-        #         proc.join(timeout=0.2)
-        #         proc.terminate()
-        #         proc.join(timeout=0.2)
-        #     except: # BrokenPipeError, OSError:
-        #         pass
         for i in self.subprocessDict.values():
             process = i['process']
             listener = i['listener']
-            process.exit()
-            # proc.exit()
-            # connection = i['connection']
-            # connection.send(self.SUBPROCESS_CONTROL_EXIT)
+            if i['isActive']:
+                process.exit()
             listener.join()
-            process.join()
+            process.join(timeout=2)
+            process.kill()
 
     def __sendToQueue(self):
         pic = Picture(self)

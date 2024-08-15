@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-import sys, time, atexit
+import time
 import tkinter as tk
 from PIL import ImageTk
-from multiprocessing import Process, Pipe
+from multiprocessing import Process
 from queue import Queue
-from threading import Thread, Event, enumerate, current_thread
+from threading import Thread, enumerate, current_thread
 
 def logger(message, logging=True):
     if logging:
@@ -32,19 +32,13 @@ class ShowProcess(Process):
         exit()
     
     def exit(self):
-        """Signal the process to exit
+        """Signal the process to exit"""
         
-        Sends the exit signal to the image queue, which is monitored
-        by the subprocess's listener thread. The listener should then signal
-        the subprocess's main thread to exit.
-        """
-        # self.imageQueue.put(ShowApp.EXIT_CODE)
-        self.pipe.send(ShowApp.NOTIFY_EXIT)
+        self.pipe.send(ShowApp.EXIT_CODE)
 
 
 class ShowApp():
-    EXIT_CODE = 'exit'
-    NOTIFY_EXIT = bytes([0])
+    EXIT_CODE = bytes([0])
 
     def __init__(self, pipe):
         # Record connection to main process
@@ -75,17 +69,16 @@ class ShowApp():
         self.listenerThread = Thread(target=self.listen, daemon=True)
         self.listenerThread.start()            
 
+        # Ensure window displays on top (Windows platforms)
+        self.root.iconify()
+        self.root.update()
+        self.root.deiconify()
+
         # Enter GUI event loop
-        # self.root.iconify()
-        # self.root.update()
-        # self.root.deiconify()
         self.root.mainloop()
 
     def listen(self):
         logger('Show listener has started')
-        # self.canvas = tk.Canvas(self.root)
-        # self.canvas.pack()
-        # imageID = None
         
         # Wait for an image to be sent from main process
         picture = self.pipe.recv()
@@ -94,8 +87,8 @@ class ShowApp():
             # Should be an image, add to queue
             self.imageQueue.put_nowait(picture)
 
-            # Tell the GUI to display the next image in queue
-            # by adding an custom Tk event to the bottom of the stack
+            # Tell the Tk window to display the next image in queue
+            # by adding a custom event to the bottom of the stack
             self.root.event_generate('<<ImageQueued>>', when='tail')
             
             try:
@@ -112,7 +105,6 @@ class ShowApp():
         self.root.event_generate('<<ListenerExit>>', when='head')
         
         logger(f"showImages (thread {self.listenerThread.ident}): at end of function")
-        return
 
     def showImage(self, *args):
         logger('Getting item from image queue')      
@@ -135,24 +127,6 @@ class ShowApp():
             logger('Attribute Error encountered')
             pass
 
-    def __notifyExit(self):
-        """Safely stop communication with main process
-        """
-        
-        # Tell main process that this subprocess is unusable
-        self.pipe.send(self.NOTIFY_EXIT)
-
-        # Safety interval, to handle the edge case of the main process
-        # not seeing the above message in time to stop sending images
-        # time.sleep(0.001)
-
-        # If the main process tried to send anything, it would block
-        # until the message was consumed (by this subprocess).
-        # while self.pipe.poll():
-            # _ = self.pipe.recv()   
-        
-        # self.pipe.close()
-
     def stopBackground(self, event, thread):
         """Handle Python exiting"""
         logger(f"stopBackground: threading.enumerate(): {enumerate()}")
@@ -168,32 +142,18 @@ class ShowApp():
     def onWindowClosed(self):
         """Handle GUI window close event"""
         logger('windowClosed')
-        # Notify main process that subprocess is no longer usable
-        # self.commandPipe.send(ShowApp.NOTIFY_EXIT)
-        # self.root.destroy()
-        self.__notifyExit()
-        # self.showThread.join()
-        # exit()
+        
+        # Request exit from main process
+        self.pipe.send(self.EXIT_CODE)
     
     def onListenerExit(self, *args):
         """Handle request from listener to exit process"""
-        # logger(f'onListenerExit')
         logger(f'onListenerExit: current thread is {current_thread()}')
-        # self.__notifyExit()
-        # logger('notify complete')
+        
         self.root.destroy()
         self.root.quit()
         del self.root, self.canvas
-        # self.showThread.join()
+
         logger(f"onListenerExit: threading.enumerate(): {enumerate()}")
         del self.listenerThread
         logger(f"onListenerExit: 2nd threading.enumerate(): {enumerate()}")
-
-        # if self.showThread.is_alive():
-        #     self.showThread.join(timeout=1)
-        
-        # if self.showThread.is_alive():
-        #     raise RuntimeError(f"Listener thread for show() failed to quit")
-        # elif self.showThread.is_alive() == False:
-        #     logger(f'stopBackground: Listener thread for show ({self.showThread}) has stopped')
-        # exit()
