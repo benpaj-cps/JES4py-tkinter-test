@@ -63,9 +63,10 @@ class ExploreApp():
         self.frame.grid(sticky=tk.NSEW)
 
         self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=0)
+        self.root.rowconfigure(0, weight=1)
         self.frame.columnconfigure(0, minsize=0, weight=1)
-        self.frame.rowconfigure(0, minsize=66, weight=1)
+        self.frame.rowconfigure(0, minsize=66, weight=0)
+        self.frame.rowconfigure(1, weight=1)
 
     def initInfoBar(self):
         # define fonts
@@ -140,18 +141,35 @@ class ExploreApp():
     def initImageCanvas(self):
         self.image = ImageTk.PhotoImage(file=self.imagePath)
 
+        # Containing frame
+        self.imageFrame = ttk.Frame(self.frame)
+        self.imageFrame.grid(row=1, column=0, sticky=tk.NSEW)
+
         # canvas for displaying image
-        self.imageCanvas = tk.Canvas(self.frame, width=self.image.width(), height=self.image.height())
-        # image on canvas
-        # self.loadImage()   
-        
-        # self.imageCanvas.config(width=self.image.width(), height=self.image.height)
+        self.imageCanvas = tk.Canvas(self.imageFrame, width=self.image.width(), height=self.image.height())
+        self.imageCanvas.config(scrollregion=(0, 0, self.image.width(), self.image.height()))
         
         self.imageCanvas.create_image(0, 0, image=self.image, anchor=tk.NW)
         
-        self.imageCanvas.grid(row=1, sticky=tk.NW)
-        # scrollbars on sides
-        pass    
+        # self.imageCanvas.grid(row=1, sticky=tk.NW)
+        
+        
+        # scrollbars on sides, see https://tkdocs.com/shipman/connecting-scrollbars.html
+        self.xScrollbar = ttk.Scrollbar(self.imageFrame, orient=tk.HORIZONTAL, command=self.imageCanvas.xview)
+        self.yScrollbar = ttk.Scrollbar(self.imageFrame, orient=tk.VERTICAL, command=self.imageCanvas.yview)
+        
+        self.imageCanvas.config(xscrollcommand=self.xScrollbar.set)
+        self.imageCanvas.config(yscrollcommand=self.yScrollbar.set)
+
+        self.imageCanvas.grid(row=0, column=0, sticky=tk.NW)
+        
+        self.xScrollbar.grid(row=1, column=0, sticky=tk.EW)
+        self.yScrollbar.grid(row=0, column=1, sticky=tk.NS)
+        
+        self.imageCanvas.columnconfigure(0, weight=1)
+        self.imageCanvas.rowconfigure(0, weight=1)
+        self.imageFrame.columnconfigure(0, weight=1)
+        self.imageFrame.rowconfigure(0, weight=1)
     
     def initZoomMenu(self):
         # zoom menu item
