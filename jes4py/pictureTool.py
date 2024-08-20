@@ -52,7 +52,9 @@ class ExploreApp():
         self.initContentFrame()
         self.initInfoBar()
         self.initImageCanvas()
-
+        
+        self.initZoomMenu()
+        
         self.root.mainloop()
         
     def loadImage(self):
@@ -140,6 +142,9 @@ class ExploreApp():
 
     def initImageCanvas(self):
         self.image = ImageTk.PhotoImage(file=self.imagePath)
+        
+        # Copy of image for scaling purposes
+        self.scaledImage = ImageTk.PhotoImage(ImageTk.getimage(self.image))
 
         # Containing frame
         self.imageFrame = ttk.Frame(self.frame)
@@ -149,7 +154,7 @@ class ExploreApp():
         self.imageCanvas = tk.Canvas(self.imageFrame, width=self.image.width(), height=self.image.height())
         self.imageCanvas.config(scrollregion=(0, 0, self.image.width(), self.image.height()))
         
-        self.imageCanvas.create_image(0, 0, image=self.image, anchor=tk.NW)
+        self.imageItemID = self.imageCanvas.create_image(0, 0, image=self.image, anchor=tk.NW)
         
         # self.imageCanvas.grid(row=1, sticky=tk.NW)
         
@@ -174,22 +179,61 @@ class ExploreApp():
         self.imageFrame.rowconfigure(0, weight=1)
 
     def onScrollbarResize(self, event):
-        if event.width >= self.image.width():
+        imageWidth = self.scaledImage.width()
+        imageHeight = self.scaledImage.height()
+        
+        if event.width >= imageWidth:
             self.xScrollbar.grid_remove()
-        elif event.width < self.image.width():
+        elif event.width < imageWidth:
             self.xScrollbar.grid(row=1, column=0, sticky=tk.EW)
             
-        if event.height >= self.image.height():
+        if event.height >= imageHeight:
             self.yScrollbar.grid_remove()
-        elif event.height < self.image.height():
+        elif event.height < imageHeight:
             self.yScrollbar.grid(row=0, column=1, sticky=tk.NS)
-        
 
+        # if event.width >= self.image.width():
+        #     self.xScrollbar.grid_remove()
+        # elif event.width < self.image.width():
+        #     self.xScrollbar.grid(row=1, column=0, sticky=tk.EW)
+            
+        # if event.height >= self.image.height():
+        #     self.yScrollbar.grid_remove()
+        # elif event.height < self.image.height():
+        #     self.yScrollbar.grid(row=0, column=1, sticky=tk.NS)
     
     def initZoomMenu(self):
+        # https://tkdocs.com/tutorial/menus.html
         # zoom menu item
+        self.menubar = tk.Menu(self.root)
+        self.zoomMenu = tk.Menu(self.menubar)
+        self.menubar.add_cascade(menu=self.zoomMenu, label='Zoom')
+
+        self.zoomFactorVariable = tk.DoubleVar()
+        self.zoomLevels = [25, 50, 75, 100, 150, 200, 500]
+        
         # menu entries
-        pass
+        for i in self.zoomLevels:
+            self.zoomMenu.add_radiobutton(label=f'{i}%', variable=self.zoomFactorVariable, value=i/100)            
+
+        self.zoomFactorVariable.trace_add(mode='write', callback=self.onZoom)
+        
+        self.root.config(menu=self.menubar)
+        
+    def onZoom(self, *args):
+        scaleFactor = self.zoomFactorVariable.get()
+        self.scaledImage = ImageTk.getimage(self.image)
+        self.scaledImage = ImageOps.scale(image=self.scaledImage, factor=scaleFactor)
+        self.scaledImage = ImageTk.PhotoImage(self.scaledImage)
+
+        # newWidth = int(self.imageCanvas.winfo_width() * scaleFactor)
+        # newHeight = int(self.imageCanvas.winfo_height() * scaleFactor)
+        self.imageCanvas.itemconfig(self.imageItemID, image=self.scaledImage)
+        self.imageCanvas.scale(self.imageItemID, 0, 0, scaleFactor, scaleFactor)
+        self.imageCanvas.config(width=self.scaledImage.width(), height=self.scaledImage.height())
+        self.imageCanvas.config(scrollregion=(0, 0, self.scaledImage.width(), self.scaledImage.height()))
+        # self.imageCanvas.config(width=newWidth, height=newHeight)
+
 
 '''class MainWindow
 
