@@ -166,10 +166,25 @@ class ExploreApp():
         self.xScrollbar.grid(row=1, column=0, sticky=tk.EW)
         self.yScrollbar.grid(row=0, column=1, sticky=tk.NS)
         
+        self.imageCanvas.bind('<Configure>', self.onScrollbarResize)
+        
         self.imageCanvas.columnconfigure(0, weight=1)
         self.imageCanvas.rowconfigure(0, weight=1)
         self.imageFrame.columnconfigure(0, weight=1)
         self.imageFrame.rowconfigure(0, weight=1)
+
+    def onScrollbarResize(self, event):
+        if event.width >= self.image.width():
+            self.xScrollbar.grid_remove()
+        elif event.width < self.image.width():
+            self.xScrollbar.grid(row=1, column=0, sticky=tk.EW)
+            
+        if event.height >= self.image.height():
+            self.yScrollbar.grid_remove()
+        elif event.height < self.image.height():
+            self.yScrollbar.grid(row=0, column=1, sticky=tk.NS)
+        
+
     
     def initZoomMenu(self):
         # zoom menu item
