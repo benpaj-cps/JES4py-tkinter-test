@@ -48,10 +48,16 @@ class ExploreApp():
         self.imageTitle = imageTitle
 
         self.root = tk.Tk()
+        
+        self.cursorXVar = tk.StringVar()
+        self.cursorXVar.set('0')
+        self.cursorYVar = tk.StringVar()
+        self.cursorYVar.set('0')
 
         self.initContentFrame()
         self.initInfoBar()
         self.initImageCanvas()
+        self.initCursor()
         
         self.initZoomMenu()
         
@@ -93,9 +99,9 @@ class ExploreApp():
         self.yText = ttk.Label(self.navBar, text='Y:', font=self.smallFont)
 
         # x input field
-        self.xInput = ttk.Entry(self.navBar, width=6, font=self.smallFont)
+        self.xInput = ttk.Entry(self.navBar, width=6, font=self.smallFont, textvariable=self.cursorXVar)
         # y input field
-        self.yInput = ttk.Entry(self.navBar, width=6, font=self.smallFont)
+        self.yInput = ttk.Entry(self.navBar, width=6, font=self.smallFont, textvariable=self.cursorYVar)
 
 
         # Icons made by Freepik from www.flaticon.com; Modified by Gahngnin Kim
@@ -106,10 +112,10 @@ class ExploreApp():
         self.leftArrowIcon = ImageTk.PhotoImage(file=self.leftArrowImagePath)
         
         # x/y increment/decrement
-        self.xIncrementButton = ttk.Button(self.navBar, image=self.rightArrowIcon)
-        self.xDecrementButton = ttk.Button(self.navBar, image=self.leftArrowIcon)
-        self.yIncrementButton = ttk.Button(self.navBar, image=self.rightArrowIcon)
-        self.yDecrementButton = ttk.Button(self.navBar, image=self.leftArrowIcon) 
+        self.xIncrementButton = ttk.Button(self.navBar, image=self.rightArrowIcon, command=self.onXIncrement)
+        self.xDecrementButton = ttk.Button(self.navBar, image=self.leftArrowIcon, command=self.onXDecrement)
+        self.yIncrementButton = ttk.Button(self.navBar, image=self.rightArrowIcon, command=self.onYIncrement)
+        self.yDecrementButton = ttk.Button(self.navBar, image=self.leftArrowIcon, command=self.onYDecrement) 
 
         # color display
         self.colorBar = ttk.Frame(self.infoBar, height=50)
@@ -123,7 +129,7 @@ class ExploreApp():
         # Arrange items on info bar
         self.infoBar.grid(row=0, sticky=tk.N, padx=10)
         self.navBar.grid(row=0, sticky=tk.N, pady=3)
-        
+
         self.xText.grid(row=0, column=0)
         self.xDecrementButton.grid(row=0, column=1)
         self.xInput.grid(row=0, column=2)
@@ -158,7 +164,6 @@ class ExploreApp():
         
         # self.imageCanvas.grid(row=1, sticky=tk.NW)
         
-        
         # scrollbars on sides, see https://tkdocs.com/shipman/connecting-scrollbars.html
         self.xScrollbar = ttk.Scrollbar(self.imageFrame, orient=tk.HORIZONTAL, command=self.imageCanvas.xview)
         self.yScrollbar = ttk.Scrollbar(self.imageFrame, orient=tk.VERTICAL, command=self.imageCanvas.yview)
@@ -178,10 +183,63 @@ class ExploreApp():
         self.imageFrame.columnconfigure(0, weight=1)
         self.imageFrame.rowconfigure(0, weight=1)
 
+    def initCursor(self):
+        self.cursorTag = 'cursor'
+        
+        self.cursorVerticalLine = self.imageCanvas.create_line(0, -3, 0, 4, width=1, fill='#FFFF00', tags=self.cursorTag)
+        self.cursorHorizontalLine = self.imageCanvas.create_line(-3, 0, 4, 0, width=1, fill='#FFFF00', tags=self.cursorTag)
+        self.imageCanvas.itemconfig(self.cursorTag, state='hidden')
+        
+        self.imageCanvas.bind('<1>', self.onImageClicked)
+        self.cursorXVar.trace_add(mode='write', callback=self.updateCursor)
+        self.cursorYVar.trace_add(mode='write', callback=self.updateCursor)
+ 
+    def updateCursor(self, *args):
+        newX = int(self.cursorXVar.get()) * self.zoomFactorVariable.get()
+        newY = int(self.cursorYVar.get()) * self.zoomFactorVariable.get()
+        self.imageCanvas.moveto(self.cursorTag,
+                                 int(newX - 4),
+                                 int(newY - 8))
+        self.imageCanvas.itemconfig(self.cursorTag, state='normal')
+        self.updateColor()
+    
+    def updateColor(self, *args):
+        image = ImageTk.getimage(self.image)
+        r, g, b, a = image.getpixel((int(self.cursorXVar.get()), int(self.cursorYVar.get())))
+        self.rgbText.config(text=f'R: {r} G: {g} B: {b}')
+        hexColor = f'#{bytes([r, g, b]).hex().upper()}'
+        self.colorPatch.config(background=hexColor)
+ 
+    def onImageClicked(self, event):
+        self.cursorXVar.set(str(int(event.x / self.zoomFactorVariable.get())))
+        self.cursorYVar.set(str(int(event.y / self.zoomFactorVariable.get())))
+    
+    def onXIncrement(self, *args):
+        currentX = int(self.cursorXVar.get())
+        currentX = int(min(currentX + 1, self.imageCanvas.winfo_width() /
+                        self.zoomFactorVariable.get()))
+        self.cursorXVar.set(str(currentX))
+        
+    def onYIncrement(self, *args):
+        currentY = int(self.cursorYVar.get())
+        currentY = int(min(currentY + 1, self.imageCanvas.winfo_height() /
+                        self.zoomFactorVariable.get()))
+        self.cursorYVar.set(str(currentY))
+
+    def onXDecrement(self, *args):
+        currentX = int(self.cursorXVar.get())
+        currentX = max(currentX - 1, 0)
+        self.cursorXVar.set(str(currentX))
+
+    def onYDecrement(self, *args):
+        currentY = int(self.cursorYVar.get())
+        currentY = max(currentY - 1, 0)
+        self.cursorYVar.set(str(currentY))
+        
     def onScrollbarResize(self, event):
         imageWidth = self.scaledImage.width()
         imageHeight = self.scaledImage.height()
-        
+
         if event.width >= imageWidth:
             self.xScrollbar.grid_remove()
         elif event.width < imageWidth:
@@ -191,16 +249,6 @@ class ExploreApp():
             self.yScrollbar.grid_remove()
         elif event.height < imageHeight:
             self.yScrollbar.grid(row=0, column=1, sticky=tk.NS)
-
-        # if event.width >= self.image.width():
-        #     self.xScrollbar.grid_remove()
-        # elif event.width < self.image.width():
-        #     self.xScrollbar.grid(row=1, column=0, sticky=tk.EW)
-            
-        # if event.height >= self.image.height():
-        #     self.yScrollbar.grid_remove()
-        # elif event.height < self.image.height():
-        #     self.yScrollbar.grid(row=0, column=1, sticky=tk.NS)
     
     def initZoomMenu(self):
         # https://tkdocs.com/tutorial/menus.html
@@ -210,6 +258,7 @@ class ExploreApp():
         self.menubar.add_cascade(menu=self.zoomMenu, label='Zoom')
 
         self.zoomFactorVariable = tk.DoubleVar()
+        self.zoomFactorVariable.set(1.0)
         self.zoomLevels = [25, 50, 75, 100, 150, 200, 500]
         
         # menu entries
@@ -229,7 +278,7 @@ class ExploreApp():
         # newWidth = int(self.imageCanvas.winfo_width() * scaleFactor)
         # newHeight = int(self.imageCanvas.winfo_height() * scaleFactor)
         self.imageCanvas.itemconfig(self.imageItemID, image=self.scaledImage)
-        self.imageCanvas.scale(self.imageItemID, 0, 0, scaleFactor, scaleFactor)
+        # self.imageCanvas.scale(self.imageItemID, 0, 0, 1/scaleFactor, 1/scaleFactor)
         self.imageCanvas.config(width=self.scaledImage.width(), height=self.scaledImage.height())
         self.imageCanvas.config(scrollregion=(0, 0, self.scaledImage.width(), self.scaledImage.height()))
         # self.imageCanvas.config(width=newWidth, height=newHeight)
