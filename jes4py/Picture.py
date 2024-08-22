@@ -800,7 +800,7 @@ class Picture:
     
     def __runExploreProcess(self, filename):
         mainConn, subConn = Pipe()
-        process = ExploreProcess(filename, self.title, subConn)
+        process = ExploreProcess(subConn, filename, self.title)
         self.__registerSubprocess(process, mainConn)
         return process
         

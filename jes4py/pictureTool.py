@@ -6,6 +6,7 @@ from threading import *
 import tkinter as tk
 from tkinter import ttk, font
 from PIL import Image, ImageTk, ImageOps
+from jes4py import Config
 
 # Method from https://tkdocs.com/tutorial/grid.html
 
@@ -19,35 +20,45 @@ class ExploreProcess(Process)
 
     listen
 '''
-        
-'''
-class Cursor
-    __init__
-        initialize
-        create bitmaps for cursor
-
-    drawCursor
-        position cursor
-        save image under cursor
-        draw cursor bitmap
-
-    undrawPreviousCursor
-        reset image under last cursor position
-
-    drawCrosshairs
-        display cursor
-
-    clearBackupBitmap
-        clear bitmap buffer
-'''
-
-class ExploreApp():
-    def __init__(self, imagePath, imageTitle, pipe=None) -> None:
+class ExploreProcess(Process):
+    EXIT_CODE = bytes([0])
+    
+    def __init__(self, pipe, imagePath, imageTitle=None):
+        Process.__init__(self)
         self.pipe = pipe
         self.imagePath = imagePath
+        self.imageTitle = imageTitle if imageTitle else 'Picture'
+        self.start()
+    
+    def run(self):
+        self.listenerThread = Thread(target=self.listenForExit, daemon=True)
+        self.listenerThread.start()
+        self.app = ExploreApp(self.imagePath, self.imageTitle, self.pipe)
+        del self.app
+        exit()
+        
+    def listenForExit(self):
+        while self.pipe.recv() != ExploreApp.EXIT_CODE:
+            print('Unknown message recieved by explore() ' +
+                   f'process for {self.imageTitle} at {self.imagePath}')
+        self.app.quit()
+    
+    def exit(self):
+        self.pipe.send(ExploreApp.EXIT_CODE)
+
+
+class ExploreApp():
+    EXIT_CODE = bytes([0])
+
+    def __init__(self, imagePath, imageTitle, pipe=None):
+        self.imagePath = imagePath
         self.imageTitle = imageTitle
+        if pipe:
+            self.pipe = pipe
 
         self.root = tk.Tk()
+        self.root.protocol('WM_DELETE_WINDOW', self.onExit)
+        self.root.bind('<<ExitRequest>>', self.onExit)
         
         self.cursorXVar = tk.StringVar()
         self.cursorXVar.set('0')
@@ -62,6 +73,9 @@ class ExploreApp():
         self.initZoomMenu()
         
         self.root.mainloop()
+    
+    def requestExit(self):
+        self.root.event_generate('<<ExitRequest>>', when='head')
         
     def loadImage(self):
         self.image = ImageTk.PhotoImage(file=self.imagePath)
@@ -105,8 +119,8 @@ class ExploreApp():
 
 
         # Icons made by Freepik from www.flaticon.com; Modified by Gahngnin Kim
-        self.rightArrowImagePath = os.path.join(sys.path[0], 'images', 'Right2.png')
-        self.leftArrowImagePath = os.path.join(sys.path[0], 'images', 'Left2.png')
+        self.rightArrowImagePath = os.path.join(Config.getConfigVal('CONFIG_JES4PY_PATH'), 'images', 'Right2.png')
+        self.leftArrowImagePath = os.path.join(Config.getConfigVal('CONFIG_JES4PY_PATH'), 'images', 'Left2.png')
 
         self.rightArrowIcon = ImageTk.PhotoImage(file=self.rightArrowImagePath)
         self.leftArrowIcon = ImageTk.PhotoImage(file=self.leftArrowImagePath)
@@ -282,6 +296,11 @@ class ExploreApp():
         self.imageCanvas.config(width=self.scaledImage.width(), height=self.scaledImage.height())
         self.imageCanvas.config(scrollregion=(0, 0, self.scaledImage.width(), self.scaledImage.height()))
         # self.imageCanvas.config(width=newWidth, height=newHeight)
+    
+    def onExit(self, *args):
+        self.root.destroy()
+        self.root.quit()
+        del self.root
 
 
 '''class MainWindow
