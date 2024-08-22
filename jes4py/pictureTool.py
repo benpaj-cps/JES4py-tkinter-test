@@ -10,55 +10,38 @@ from jes4py import Config
 
 # Method from https://tkdocs.com/tutorial/grid.html
 
-'''
-class ExploreProcess(Process)
-    __init__
-
-    run
-
-    exit
-
-    listen
-'''
 class ExploreProcess(Process):
-    EXIT_CODE = bytes([0])
-    
     def __init__(self, pipe, imagePath, imageTitle=None):
         Process.__init__(self)
         self.pipe = pipe
         self.imagePath = imagePath
         self.imageTitle = imageTitle if imageTitle else 'Picture'
+        self.app = None
         self.start()
     
     def run(self):
-        self.listenerThread = Thread(target=self.listenForExit, daemon=True)
-        self.listenerThread.start()
-        self.app = ExploreApp(self.imagePath, self.imageTitle, self.pipe)
+        self.app = ExploreApp(self.imagePath, self.imageTitle)
+        
         del self.app
+
+        self.pipe.send(ExploreApp.EXIT_CODE)
+        self.pipe.recv()
+        
         exit()
         
-    def listenForExit(self):
-        while self.pipe.recv() != ExploreApp.EXIT_CODE:
-            print('Unknown message recieved by explore() ' +
-                   f'process for {self.imageTitle} at {self.imagePath}')
-        self.app.quit()
-    
     def exit(self):
+        self.terminate()
         self.pipe.send(ExploreApp.EXIT_CODE)
-
+        self.pipe.recv()
 
 class ExploreApp():
     EXIT_CODE = bytes([0])
 
-    def __init__(self, imagePath, imageTitle, pipe=None):
+    def __init__(self, imagePath, imageTitle):
         self.imagePath = imagePath
         self.imageTitle = imageTitle
-        if pipe:
-            self.pipe = pipe
-
         self.root = tk.Tk()
-        self.root.protocol('WM_DELETE_WINDOW', self.onExit)
-        self.root.bind('<<ExitRequest>>', self.onExit)
+        self.root.bind('<<Quit>>', self.doQuit)
         
         self.cursorXVar = tk.StringVar()
         self.cursorXVar.set('0')
@@ -74,8 +57,8 @@ class ExploreApp():
         
         self.root.mainloop()
     
-    def requestExit(self):
-        self.root.event_generate('<<ExitRequest>>', when='head')
+    def requestQuit(self):
+        self.root.event_generate('<<Quit>>', when='head')
         
     def loadImage(self):
         self.image = ImageTk.PhotoImage(file=self.imagePath)
@@ -297,7 +280,7 @@ class ExploreApp():
         self.imageCanvas.config(scrollregion=(0, 0, self.scaledImage.width(), self.scaledImage.height()))
         # self.imageCanvas.config(width=newWidth, height=newHeight)
     
-    def onExit(self, *args):
+    def doQuit(self, *args):
         self.root.destroy()
         self.root.quit()
         del self.root
