@@ -313,8 +313,8 @@ class ExploreApp():
         self.colorPatch.config(background=hexColor)
  
     def onImageClicked(self, event):
-        newX = int(event.x / self.zoomFactorVariable.get())
-        newY = int(event.y / self.zoomFactorVariable.get())
+        newX = int(self.imageCanvas.canvasx(event.x, gridspacing=1) / self.zoomFactorVariable.get())
+        newY = int(self.imageCanvas.canvasy(event.y, gridspacing=1) / self.zoomFactorVariable.get())
 
         self.validateXInput(str(newX))
         self.validateYInput(str(newY))
