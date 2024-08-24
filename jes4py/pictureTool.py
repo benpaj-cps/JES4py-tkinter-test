@@ -36,6 +36,7 @@ class ExploreProcess(Process):
 
 class ExploreApp():
     EXIT_CODE = bytes([0])
+    CURSOR_RADIUS = 7
 
     def __init__(self, imagePath, imageTitle):
         self.imagePath = imagePath
@@ -43,10 +44,13 @@ class ExploreApp():
         self.root = tk.Tk()
         self.root.bind('<<Quit>>', self.doQuit)
         
-        self.cursorXVar = tk.StringVar()
-        self.cursorXVar.set('0')
-        self.cursorYVar = tk.StringVar()
-        self.cursorYVar.set('0')
+        self.cursorX = 0
+        self.cursorY = 0
+
+        self.xInputVar = tk.StringVar()
+        self.xInputVar.set('0')
+        self.yInputVar = tk.StringVar()
+        self.yInputVar.set('0')
 
         self.initContentFrame()
         self.initInfoBar()
@@ -95,11 +99,49 @@ class ExploreApp():
         # y: text
         self.yText = ttk.Label(self.navBar, text='Y:', font=self.smallFont)
 
-        # x input field
-        self.xInput = ttk.Entry(self.navBar, width=6, font=self.smallFont, textvariable=self.cursorXVar)
-        # y input field
-        self.yInput = ttk.Entry(self.navBar, width=6, font=self.smallFont, textvariable=self.cursorYVar)
+        self.xValidateCommand = self.navBar.register(self.validateXInput)
+        self.yValidateCommand = self.navBar.register(self.validateYInput)
 
+        # x input field
+        self.xInput = ttk.Entry(
+             self.navBar, name='x_input',
+             width=6, font=self.smallFont,
+             textvariable=self.xInputVar, validate='focus',
+             validatecommand=(self.xValidateCommand, '%P'))
+        # x input field
+        self.yInput = ttk.Entry(
+             self.navBar, name='y_input',
+             width=6, font=self.smallFont,
+             textvariable=self.yInputVar, validate='focus',
+             validatecommand=(self.yValidateCommand, '%P'))
+
+        self.xInput.bind('<uparrow>', self.onXIncrement)
+        self.xInput.bind('<downarrow>', self.onXDecrement)
+        self.xInput.bind('<Return>', self.validateXInput)
+
+        self.yInput.bind('<uparrow>', self.onYIncrement)
+        self.yInput.bind('<downarrow>', self.onYDecrement)
+        self.yInput.bind('<Return>', self.validateYInput)
+
+        # Icons made by Freepik from www.flaticon.com; Modified by Gahngnin Kim
+        self.rightArrowImagePath = os.path.join(Config.getConfigVal('CONFIG_JES4PY_PATH'), 'images', 'Right2.png')
+        self.leftArrowImagePath = os.path.join(Config.getConfigVal('CONFIG_JES4PY_PATH'), 'images', 'Left2.png')
+
+        self.rightArrowIcon = ImageTk.PhotoImage(file=self.rightArrowImagePath)
+        self.leftArrowIcon = ImageTk.PhotoImage(file=self.leftArrowImagePath)
+        
+        # x/y increment/decrement
+        self.xIncrementButton = ttk.Button(self.navBar, image=self.rightArrowIcon, command=self.onXIncrement)
+        self.xDecrementButton = ttk.Button(self.navBar, image=self.leftArrowIcon, command=self.onXDecrement)
+        self.yIncrementButton = ttk.Button(self.navBar, image=self.rightArrowIcon, command=self.onYIncrement)
+        self.yDecrementButton = ttk.Button(self.navBar, image=self.leftArrowIcon, command=self.onYDecrement) 
+
+        # color display
+        self.colorBar = ttk.Frame(self.infoBar, height=50)
+        # rgb text
+        self.rgbText = ttk.Label(self.colorBar, text="R: 0 G: 0 B: 0", font=self.largeFont)
+        # color at location text
+        self.colorAtText = ttk.Label(self.colorBar, text="Color at location: ", font=self.largeFont)
 
         # Icons made by Freepik from www.flaticon.com; Modified by Gahngnin Kim
         self.rightArrowImagePath = os.path.join(Config.getConfigVal('CONFIG_JES4PY_PATH'), 'images', 'Right2.png')
@@ -142,6 +184,45 @@ class ExploreApp():
         self.rgbText.grid(row=0, column=0)
         self.colorAtText.grid(row=0, column=1)
         self.colorPatch.grid(row=0, column=2)
+    
+    def validateCoords(self, x, y):
+        xIsValid = x >= 0 and x < self.image.width()
+        yIsValid = y >= 0 and y < self.image.height()
+        
+        return xIsValid and yIsValid
+
+    def validateXInput(self, x=None) -> int:
+        x = x if isinstance(x, str) else self.xInputVar.get()
+
+        if not x.isdigit():
+            self.xInputVar.set(str(self.cursorX))
+            return 0
+        
+        x = int(x)
+        if x >= 0 and x < self.image.width():
+            self.cursorX = x
+            self.updateCursor()
+            return 1
+        else:
+            self.xInputVar.set(str(self.cursorX))
+            return 0
+    
+    def validateYInput(self, y=None) -> int:
+        y = y if isinstance(y, str) else self.yInputVar.get()
+
+        if not y.isdigit():
+            self.yInputVar.set(str(self.cursorY))
+            return 0
+        
+        y = int(y)
+        if y >= 0 and y < self.image.height():
+            self.cursorY = y
+            self.updateCursor()
+            return 1
+        else:
+            self.yInputVar.set(str(self.cursorY))
+            return 0
+        
 
     def initImageCanvas(self):
         self.image = ImageTk.PhotoImage(file=self.imagePath)
@@ -174,6 +255,8 @@ class ExploreApp():
         self.yScrollbar.grid(row=0, column=1, sticky=tk.NS)
         
         self.imageCanvas.bind('<Configure>', self.onScrollbarResize)
+        # self.imageCanvas.bind('<1>', self.onImageClicked)
+        self.imageCanvas.tag_bind(self.imageItemID, '<1>', self.onImageClicked)
         
         self.imageCanvas.columnconfigure(0, weight=1)
         self.imageCanvas.rowconfigure(0, weight=1)
@@ -183,55 +266,84 @@ class ExploreApp():
     def initCursor(self):
         self.cursorTag = 'cursor'
         
-        self.cursorVerticalLine = self.imageCanvas.create_line(0, -3, 0, 4, width=1, fill='#FFFF00', tags=self.cursorTag)
-        self.cursorHorizontalLine = self.imageCanvas.create_line(-3, 0, 4, 0, width=1, fill='#FFFF00', tags=self.cursorTag)
-        self.imageCanvas.itemconfig(self.cursorTag, state='hidden')
+        # Should be odd number
+        cursorRadius = 3
         
-        self.imageCanvas.bind('<1>', self.onImageClicked)
-        self.cursorXVar.trace_add(mode='write', callback=self.updateCursor)
-        self.cursorYVar.trace_add(mode='write', callback=self.updateCursor)
+        self.cursorCenter = self.imageCanvas.create_line(cursorRadius, cursorRadius, cursorRadius, cursorRadius, width=1, fill='#FFFFFF', tags=self.cursorTag)
+        self.cursorLine1 = self.imageCanvas.create_line(0, cursorRadius, cursorRadius*2 + 1, cursorRadius, width=3, fill='#000000', tags=self.cursorTag)
+        self.cursorLine2 = self.imageCanvas.create_line(cursorRadius, 0, cursorRadius, cursorRadius*2 + 1, width=3, fill='#000000', tags=self.cursorTag)
+        self.cursorLine3 = self.imageCanvas.create_line(1, cursorRadius, cursorRadius*2, cursorRadius, width=1, fill='#FFFF00', tags=self.cursorTag)
+        self.cursorLine4 = self.imageCanvas.create_line(cursorRadius, 1, cursorRadius, cursorRadius*2, width=1, fill='#FFFF00', tags=self.cursorTag)
+
+        self.imageCanvas.itemconfig(self.cursorTag, state='hidden')
+
+        # self.cursorXVar.trace_add(mode='write', callback=self.updateCursor)
+        # self.cursorYVar.trace_add(mode='write', callback=self.updateCursor)
  
+    def resetCursor(self):
+        self.imageCanvas.delete(self.cursorTag)
+        self.initCursor()
+
     def updateCursor(self, *args):
-        newX = int(self.cursorXVar.get()) * self.zoomFactorVariable.get()
-        newY = int(self.cursorYVar.get()) * self.zoomFactorVariable.get()
-        self.imageCanvas.moveto(self.cursorTag,
-                                 int(newX - 4),
-                                 int(newY - 8))
+        # self.imageCanvas.itemconfig(self.cursorTag, state='hidden')
+        newX = self.cursorX * self.zoomFactorVariable.get()
+        newY = self.cursorY * self.zoomFactorVariable.get()
+        # print(f'Cursor at ({newX}, {newY})')
+
+        self.imageCanvas.delete(self.cursorTag)
+        self.imageCanvas.create_line(newX - self.CURSOR_RADIUS, newY, newX + self.CURSOR_RADIUS + 1, newY, width=3, fill='#000000', tags=self.cursorTag)
+        self.imageCanvas.create_line(newX, newY - self.CURSOR_RADIUS, newX, newY + self.CURSOR_RADIUS + 1, width=3, fill='#000000', tags=self.cursorTag)
+        self.imageCanvas.create_line(newX - self.CURSOR_RADIUS + 1, newY, newX + self.CURSOR_RADIUS, newY, width=1, fill='#FFFF00', tags=self.cursorTag)
+        self.imageCanvas.create_line(newX, newY - self.CURSOR_RADIUS + 1, newX, newY + self.CURSOR_RADIUS, width=1, fill='#FFFF00', tags=self.cursorTag)
+
+        # self.resetCursor()
+        # self.imageCanvas.moveto(self.cursorTag,
+                                #  int(newX),
+                                #  int(newY))
         self.imageCanvas.itemconfig(self.cursorTag, state='normal')
+        self.xInputVar.set(self.cursorX)
+        self.yInputVar.set(self.cursorY)
         self.updateColor()
     
     def updateColor(self, *args):
         image = ImageTk.getimage(self.image)
-        r, g, b, a = image.getpixel((int(self.cursorXVar.get()), int(self.cursorYVar.get())))
+        r, g, b, a = image.getpixel((self.cursorX, self.cursorY))
         self.rgbText.config(text=f'R: {r} G: {g} B: {b}')
         hexColor = f'#{bytes([r, g, b]).hex().upper()}'
         self.colorPatch.config(background=hexColor)
  
     def onImageClicked(self, event):
-        self.cursorXVar.set(str(int(event.x / self.zoomFactorVariable.get())))
-        self.cursorYVar.set(str(int(event.y / self.zoomFactorVariable.get())))
+        newX = int(event.x / self.zoomFactorVariable.get())
+        newY = int(event.y / self.zoomFactorVariable.get())
+
+        self.validateXInput(str(newX))
+        self.validateYInput(str(newY))
+
+        # self.cursorXVar.set(str(newX))
+        # self.cursorYVar.set(str(newY))
+        
+        # if self.validateXInput(str(newX)) and self.validateYInput(str(newY)):
+        #     # self.cursorX = newX
+        #     # self.cursorY = newY
+            
+        #     self.xInputVar.set(str(newX))
+        #     self.yInputVar.set(str(newY))
     
     def onXIncrement(self, *args):
-        currentX = int(self.cursorXVar.get())
-        currentX = int(min(currentX + 1, self.imageCanvas.winfo_width() /
-                        self.zoomFactorVariable.get()))
-        self.cursorXVar.set(str(currentX))
+        newX = self.cursorX + 1
+        self.validateXInput(str(newX))
         
     def onYIncrement(self, *args):
-        currentY = int(self.cursorYVar.get())
-        currentY = int(min(currentY + 1, self.imageCanvas.winfo_height() /
-                        self.zoomFactorVariable.get()))
-        self.cursorYVar.set(str(currentY))
+        newY = self.cursorY + 1
+        self.validateYInput(str(newY))
 
     def onXDecrement(self, *args):
-        currentX = int(self.cursorXVar.get())
-        currentX = max(currentX - 1, 0)
-        self.cursorXVar.set(str(currentX))
+        newX = self.cursorX - 1
+        self.validateXInput(str(newX))
 
     def onYDecrement(self, *args):
-        currentY = int(self.cursorYVar.get())
-        currentY = max(currentY - 1, 0)
-        self.cursorYVar.set(str(currentY))
+        newY = self.cursorY - 1
+        self.validateYInput(str(newY))
         
     def onScrollbarResize(self, event):
         imageWidth = self.scaledImage.width()
@@ -268,9 +380,15 @@ class ExploreApp():
         
     def onZoom(self, *args):
         scaleFactor = self.zoomFactorVariable.get()
-        self.scaledImage = ImageTk.getimage(self.image)
-        self.scaledImage = ImageOps.scale(image=self.scaledImage, factor=scaleFactor)
-        self.scaledImage = ImageTk.PhotoImage(self.scaledImage)
+        
+        if scaleFactor != 1.0:
+            self.scaledImage = ImageTk.getimage(self.image)
+            self.scaledImage = ImageOps.scale(image=self.scaledImage, factor=scaleFactor)
+            self.scaledImage = ImageTk.PhotoImage(self.scaledImage)
+        else:
+            self.scaledImage = self.image
+        
+        # self.imageCanvas.grid_remove()
 
         # newWidth = int(self.imageCanvas.winfo_width() * scaleFactor)
         # newHeight = int(self.imageCanvas.winfo_height() * scaleFactor)
@@ -278,6 +396,12 @@ class ExploreApp():
         # self.imageCanvas.scale(self.imageItemID, 0, 0, 1/scaleFactor, 1/scaleFactor)
         self.imageCanvas.config(width=self.scaledImage.width(), height=self.scaledImage.height())
         self.imageCanvas.config(scrollregion=(0, 0, self.scaledImage.width(), self.scaledImage.height()))
+        
+        # self.imageCanvas.grid()
+        
+        # self.resetCursor()
+        self.updateCursor()
+        
         # self.imageCanvas.config(width=newWidth, height=newHeight)
     
     def doQuit(self, *args):
