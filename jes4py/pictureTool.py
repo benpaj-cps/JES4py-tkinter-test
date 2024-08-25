@@ -195,34 +195,30 @@ class ExploreApp():
     def validateXInput(self, x=None) -> int:
         x = x if isinstance(x, str) else self.xInputVar.get()
 
-        if not x.isdigit():
+        try:
+            x = int(x)
+        except ValueError:
             self.xInputVar.set(str(self.cursorX))
             return 0
         
-        x = int(x)
-        if x >= 0 and x < self.image.width():
-            self.cursorX = x
-            self.drawCursor()
-            return 1
-        else:
-            self.xInputVar.set(str(self.cursorX))
-            return 0
-    
+        x = min(max(x, 0), self.image.width() - 1)
+        self.cursorX = x
+        self.drawCursor()
+        return 1
+
     def validateYInput(self, y=None) -> int:
         y = y if isinstance(y, str) else self.yInputVar.get()
 
-        if not y.isdigit():
+        try:
+            y = int(y)
+        except ValueError:
             self.yInputVar.set(str(self.cursorY))
             return 0
-        
-        y = int(y)
-        if y >= 0 and y < self.image.height():
-            self.cursorY = y
-            self.drawCursor()
-            return 1
-        else:
-            self.yInputVar.set(str(self.cursorY))
-            return 0
+
+        y = min(max(y, 0), self.image.height() - 1)
+        self.cursorY = y
+        self.drawCursor()
+        return 1
 
     def initImageCanvas(self):
         self.image = ImageTk.PhotoImage(file=self.imagePath)
