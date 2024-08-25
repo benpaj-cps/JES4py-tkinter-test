@@ -257,6 +257,7 @@ class ExploreApp():
         self.imageCanvas.bind('<Configure>', self.onScrollbarResize)
         # self.imageCanvas.bind('<1>', self.onImageClicked)
         self.imageCanvas.tag_bind(self.imageItemID, '<1>', self.onImageClicked)
+        self.imageCanvas.tag_bind(self.imageItemID, '<Button1-Motion>', self.onImageClicked)
         
         self.imageCanvas.columnconfigure(0, weight=1)
         self.imageCanvas.rowconfigure(0, weight=1)
