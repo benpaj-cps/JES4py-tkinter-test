@@ -13,24 +13,51 @@ from jes4py import Config
 class ExploreProcess(Process):
     def __init__(self, pipe, imagePath, imageTitle=None):
         Process.__init__(self)
+        
+        # Connection to main process
         self.pipe = pipe
+
+        # Location from which to load image
         self.imagePath = imagePath
+        
+        # If the image has a title, use it for the GUI window.
+        # Otherwise give it the generic title 'Picture'.
         self.imageTitle = imageTitle if imageTitle else 'Picture'
-        self.app = None
+        
+        # This causes run() to be invoked in a separate process
         self.start()
     
     def run(self):
+        """Run the app in a subprocess"""
+        # Create the GUI instance, which will start upon initialization
         self.app = ExploreApp(self.imagePath, self.imageTitle)
         
+        # If we've gotten this far, the app has ended
         del self.app
 
+        # Indicate to main process that this process is about to quit
         self.pipe.send(ExploreApp.EXIT_CODE)
-        self.pipe.recv()
         
+        # The main process should reply with an exit instruction.
+        # This is done primarily so that show() listener threads
+        # (see show.py) can be stopped easily.
+        # No listener here, so just recieve the message and exit.
+        self.pipe.recv()
         exit()
         
     def exit(self):
+        """Exit the subprocess
+        
+        This method exists so that the process can be conveniently
+        terminated from the main process side.
+        """
+
+        # Note that self.terminate means to terminate the subprocess
+        # handling the above run() method, not the calling process
         self.terminate()
+        
+        # Handshake with the main process 
+        # to confirm exit and close the pipe
         self.pipe.send(ExploreApp.EXIT_CODE)
         self.pipe.recv()
 
@@ -42,12 +69,15 @@ class ExploreApp():
     def __init__(self, imagePath, imageTitle):
         self.imagePath = imagePath
         self.imageTitle = imageTitle
-        self.root = tk.Tk()
-        self.root.bind('<<Quit>>', self.doQuit)
         
+        # Initialize the Tkinter GUI root window
+        self.root = tk.Tk()
+        
+        # Coordinates for the pixel selection cursor
         self.cursorX = 0
         self.cursorY = 0
 
+        # Tkinter string variables for coordinate input from GUI
         self.xInputVar = tk.StringVar()
         self.xInputVar.set('0')
         self.yInputVar = tk.StringVar()
@@ -56,29 +86,29 @@ class ExploreApp():
         self.initContentFrame()
         self.initInfoBar()
         self.initImageCanvas()
-        # self.initCursor()
-        
         self.initZoomMenu()
         
+        # Enter the GUI event loop
         self.root.mainloop()
-    
-    def requestQuit(self):
-        self.root.event_generate('<<Quit>>', when='head')
         
-    def loadImage(self):
-        self.image = ImageTk.PhotoImage(file=self.imagePath)
-
     def initContentFrame(self):
+        """Set up frame to hold all GUI elements"""
         self.frame = ttk.Frame(self.root)
         self.frame.grid(sticky=tk.NSEW)
 
+        # Configure frame's grid layout:
+        # Root window elements can expand/shrink
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
-        self.frame.columnconfigure(0, minsize=0, weight=1)
+        # Top bar can expand/shrink horizontally
+        self.frame.columnconfigure(0, weight=1)
+        # Top bar has constant height
         self.frame.rowconfigure(0, minsize=66, weight=0)
+        # Image panel has variable height
         self.frame.rowconfigure(1, weight=1)
 
     def initInfoBar(self):
+        """Create GUI bar at top of window"""
         # define fonts
         self.smallFont = font.Font(font='TkDefaultFont').copy()
         self.smallFont.config(size=10, weight=font.NORMAL)
@@ -86,20 +116,19 @@ class ExploreApp():
         self.largeFont = font.Font(font='TkDefaultFont').copy()
         self.largeFont.config(size=12, weight=font.NORMAL)
 
-        self.iconFont = font.Font(font='TkIconFont').copy()
-        self.iconFont.config(size=12, weight=font.BOLD)
-
         # main bar at top
         self.infoBar = ttk.Frame(self.frame)
         
-        # navigation
+        # navigation row
         self.navBar = ttk.Frame(self.infoBar)
 
-        # x text
+        # X: text
         self.xText = ttk.Label(self.navBar, text='X:', font=self.smallFont)
-        # y: text
+        # Y: text
         self.yText = ttk.Label(self.navBar, text='Y:', font=self.smallFont)
 
+        # Tcl wrappings for entry callbacks,
+        # to allow specifying callback parameters
         self.xValidateCommand = self.navBar.register(self.validateXInput)
         self.yValidateCommand = self.navBar.register(self.validateYInput)
 
@@ -109,40 +138,20 @@ class ExploreApp():
              width=6, font=self.smallFont,
              textvariable=self.xInputVar, validate='focus',
              validatecommand=(self.xValidateCommand, '%P'))
-        # x input field
+        # y input field
         self.yInput = ttk.Entry(
              self.navBar, name='y_input',
              width=6, font=self.smallFont,
              textvariable=self.yInputVar, validate='focus',
              validatecommand=(self.yValidateCommand, '%P'))
 
+        # Key bindings for input fields
         self.xInput.bind('<uparrow>', self.onXIncrement)
         self.xInput.bind('<downarrow>', self.onXDecrement)
         self.xInput.bind('<Return>', self.validateXInput)
-
         self.yInput.bind('<uparrow>', self.onYIncrement)
         self.yInput.bind('<downarrow>', self.onYDecrement)
         self.yInput.bind('<Return>', self.validateYInput)
-
-        # Icons made by Freepik from www.flaticon.com; Modified by Gahngnin Kim
-        self.rightArrowImagePath = os.path.join(Config.getConfigVal('CONFIG_JES4PY_PATH'), 'images', 'Right2.png')
-        self.leftArrowImagePath = os.path.join(Config.getConfigVal('CONFIG_JES4PY_PATH'), 'images', 'Left2.png')
-
-        self.rightArrowIcon = ImageTk.PhotoImage(file=self.rightArrowImagePath)
-        self.leftArrowIcon = ImageTk.PhotoImage(file=self.leftArrowImagePath)
-        
-        # x/y increment/decrement
-        self.xIncrementButton = ttk.Button(self.navBar, image=self.rightArrowIcon, command=self.onXIncrement)
-        self.xDecrementButton = ttk.Button(self.navBar, image=self.leftArrowIcon, command=self.onXDecrement)
-        self.yIncrementButton = ttk.Button(self.navBar, image=self.rightArrowIcon, command=self.onYIncrement)
-        self.yDecrementButton = ttk.Button(self.navBar, image=self.leftArrowIcon, command=self.onYDecrement) 
-
-        # color display
-        self.colorBar = ttk.Frame(self.infoBar, height=50)
-        # rgb text
-        self.rgbText = ttk.Label(self.colorBar, text="R: 0 G: 0 B: 0", font=self.largeFont)
-        # color at location text
-        self.colorAtText = ttk.Label(self.colorBar, text="Color at location: ", font=self.largeFont)
 
         # Icons made by Freepik from www.flaticon.com; Modified by Gahngnin Kim
         self.rightArrowImagePath = os.path.join(Config.getConfigVal('CONFIG_JES4PY_PATH'), 'images', 'Right2.png')
