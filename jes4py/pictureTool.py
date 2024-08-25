@@ -37,6 +37,7 @@ class ExploreProcess(Process):
 class ExploreApp():
     EXIT_CODE = bytes([0])
     CURSOR_RADIUS = 7
+    CURSOR_TAG = 'cursor'
 
     def __init__(self, imagePath, imageTitle):
         self.imagePath = imagePath
@@ -55,7 +56,7 @@ class ExploreApp():
         self.initContentFrame()
         self.initInfoBar()
         self.initImageCanvas()
-        self.initCursor()
+        # self.initCursor()
         
         self.initZoomMenu()
         
@@ -163,7 +164,7 @@ class ExploreApp():
         # color at location text
         self.colorAtText = ttk.Label(self.colorBar, text="Color at location: ", font=self.largeFont)
         # color patch
-        self.colorPatch = tk.Canvas(self.colorBar, background="black", width=24, height=24)
+        self.colorPatch = tk.Canvas(self.colorBar, background="black", relief='sunken', borderwidth=1, width=24, height=24)
         
         # Arrange items on info bar
         self.infoBar.grid(row=0, sticky=tk.N, padx=10)
@@ -201,7 +202,7 @@ class ExploreApp():
         x = int(x)
         if x >= 0 and x < self.image.width():
             self.cursorX = x
-            self.updateCursor()
+            self.drawCursor()
             return 1
         else:
             self.xInputVar.set(str(self.cursorX))
@@ -217,12 +218,11 @@ class ExploreApp():
         y = int(y)
         if y >= 0 and y < self.image.height():
             self.cursorY = y
-            self.updateCursor()
+            self.drawCursor()
             return 1
         else:
             self.yInputVar.set(str(self.cursorY))
             return 0
-        
 
     def initImageCanvas(self):
         self.image = ImageTk.PhotoImage(file=self.imagePath)
@@ -264,44 +264,18 @@ class ExploreApp():
         self.imageFrame.columnconfigure(0, weight=1)
         self.imageFrame.rowconfigure(0, weight=1)
 
-    def initCursor(self):
-        self.cursorTag = 'cursor'
-        
-        # Should be odd number
-        cursorRadius = 3
-        
-        self.cursorCenter = self.imageCanvas.create_line(cursorRadius, cursorRadius, cursorRadius, cursorRadius, width=1, fill='#FFFFFF', tags=self.cursorTag)
-        self.cursorLine1 = self.imageCanvas.create_line(0, cursorRadius, cursorRadius*2 + 1, cursorRadius, width=3, fill='#000000', tags=self.cursorTag)
-        self.cursorLine2 = self.imageCanvas.create_line(cursorRadius, 0, cursorRadius, cursorRadius*2 + 1, width=3, fill='#000000', tags=self.cursorTag)
-        self.cursorLine3 = self.imageCanvas.create_line(1, cursorRadius, cursorRadius*2, cursorRadius, width=1, fill='#FFFF00', tags=self.cursorTag)
-        self.cursorLine4 = self.imageCanvas.create_line(cursorRadius, 1, cursorRadius, cursorRadius*2, width=1, fill='#FFFF00', tags=self.cursorTag)
-
-        self.imageCanvas.itemconfig(self.cursorTag, state='hidden')
-
-        # self.cursorXVar.trace_add(mode='write', callback=self.updateCursor)
-        # self.cursorYVar.trace_add(mode='write', callback=self.updateCursor)
- 
-    def resetCursor(self):
-        self.imageCanvas.delete(self.cursorTag)
-        self.initCursor()
-
-    def updateCursor(self, *args):
-        # self.imageCanvas.itemconfig(self.cursorTag, state='hidden')
+    def drawCursor(self, *args):
         newX = self.cursorX * self.zoomFactorVariable.get()
         newY = self.cursorY * self.zoomFactorVariable.get()
         # print(f'Cursor at ({newX}, {newY})')
 
-        self.imageCanvas.delete(self.cursorTag)
-        self.imageCanvas.create_line(newX - self.CURSOR_RADIUS, newY, newX + self.CURSOR_RADIUS + 1, newY, width=3, fill='#000000', tags=self.cursorTag)
-        self.imageCanvas.create_line(newX, newY - self.CURSOR_RADIUS, newX, newY + self.CURSOR_RADIUS + 1, width=3, fill='#000000', tags=self.cursorTag)
-        self.imageCanvas.create_line(newX - self.CURSOR_RADIUS + 1, newY, newX + self.CURSOR_RADIUS, newY, width=1, fill='#FFFF00', tags=self.cursorTag)
-        self.imageCanvas.create_line(newX, newY - self.CURSOR_RADIUS + 1, newX, newY + self.CURSOR_RADIUS, width=1, fill='#FFFF00', tags=self.cursorTag)
+        self.imageCanvas.delete(self.CURSOR_TAG)
+        self.imageCanvas.create_line(newX - self.CURSOR_RADIUS, newY, newX + self.CURSOR_RADIUS + 1, newY, width=3, fill='#000000', tags=self.CURSOR_TAG)
+        self.imageCanvas.create_line(newX, newY - self.CURSOR_RADIUS, newX, newY + self.CURSOR_RADIUS + 1, width=3, fill='#000000', tags=self.CURSOR_TAG)
+        self.imageCanvas.create_line(newX - self.CURSOR_RADIUS + 1, newY, newX + self.CURSOR_RADIUS, newY, width=1, fill='#FFFF00', tags=self.CURSOR_TAG)
+        self.imageCanvas.create_line(newX, newY - self.CURSOR_RADIUS + 1, newX, newY + self.CURSOR_RADIUS, width=1, fill='#FFFF00', tags=self.CURSOR_TAG)
 
-        # self.resetCursor()
-        # self.imageCanvas.moveto(self.cursorTag,
-                                #  int(newX),
-                                #  int(newY))
-        self.imageCanvas.itemconfig(self.cursorTag, state='normal')
+        self.imageCanvas.itemconfig(self.CURSOR_TAG, state='normal')
         self.xInputVar.set(self.cursorX)
         self.yInputVar.set(self.cursorY)
         self.updateColor()
@@ -401,7 +375,7 @@ class ExploreApp():
         # self.imageCanvas.grid()
         
         # self.resetCursor()
-        self.updateCursor()
+        self.drawCursor()
         
         # self.imageCanvas.config(width=newWidth, height=newHeight)
     
