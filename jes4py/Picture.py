@@ -792,6 +792,12 @@ class Picture:
         return filename
 
     def __runShowProcess(self):
+        """Run a subprocess for a picture frame
+        
+        Returns
+        -------
+        ShowProcess instance
+        """
         mainConn, subConn = Pipe()
         process = ShowProcess(subConn)
         self.showProcessId = process.pid
@@ -799,18 +805,27 @@ class Picture:
         return process
     
     def __runExploreProcess(self, filename):
+        """Run a subprocess for exploring a picture
+        
+        Returns
+        -------
+        ExploreProcess instance
+        """
         mainConn, subConn = Pipe()
         process = ExploreProcess(subConn, filename, self.title)
         self.__registerSubprocess(process, mainConn)
         return process
         
     def __registerSubprocess(self, process, connection):
+        """Record a subprocess in the dictionary
+        
+        Also starts a listener thread to handle the process exiting.
+        """
         # Register atexit handler if this is the first subprocess
         if len(self.subprocessList) == 0:
             atexit.register(self.__stopAllSubprocesses)
 
         # Record the process
-        # self.subprocessList.append(process)
         pid = process.pid
         listener = Thread(target=self.__listenForExit,
                            args=(pid,), daemon=True)
@@ -821,29 +836,36 @@ class Picture:
                                     'connection': connection,
                                     'isActive': isActive}
 
+        # Start the listener thread
         listener.start()
     
     def __listenForExit(self, pid):
+        """Method representing listener thread handling subprocess exit
+        """
+        # Get the dictionary entry for the process with the given ID
         d = self.subprocessDict[pid]
+        
+        # Extract the process and pipe references
         process = d['process']
         connection = d['connection']
         
+        # Wait for exit signal
         while connection.recv() != self.SUBPROCESS_EXIT_SIGNAL:
             print(f"Unknown signal received from subprocess {pid}")
         
+        # Exit signal received, process is no longer usable
         self.subprocessDict[pid]['isActive'] = False
         
         if pid == self.showProcessId:
             self.showProcessId = None
         
+        # Tell subprocess's listener to quit
         connection.send(self.SUBPROCESS_EXIT_SIGNAL)
         connection.close()
 
-        # process = self.subprocessDict[pid]['process']
+        # Detect and warn of zombie processes
         if process.is_alive():
             process.join(timeout=5)
-        elif process.is_alive() == False:
-            raise RuntimeWarning(f"Would have joined dead process {pid}")
         if process.is_alive() == True:
             raise RuntimeError(f"Subprocess {pid} said it was exiting " +
                                 "but is still alive")
@@ -857,39 +879,40 @@ class Picture:
             if i['isActive']:
                 process.exit()
             listener.join()
-            process.join(timeout=2)
+            process.join(timeout=0.2)
             process.kill()
 
-    def __sendToQueue(self):
+    def __sendPicture(self):
+        """Send picture to "show" process
+        
+        Note: the connection used is an instance of 
+        multiprocessing.Pipe, which automatically pickles
+        objects sent through it.
+        """
         pic = Picture(self)
-        # self.imageQueue.put(pic)
         self.subprocessDict[self.showProcessId]['connection'].send(pic)
 
     def show(self):
         """Show a picture using subprocess
         """
-        # if self.showProcess is None or not self.showProcess.is_alive():
         if self.showProcessId is None or not self.subprocessDict[self.showProcessId]['isActive']:
             # a show process for this pic is not running, start a new one:
-            # Reset the image queue
-            self.imageQueue = SimpleQueue()
             # Start new process
             self.showProcess = self.__runShowProcess()
         
         try:
-            self.__sendToQueue()
-        except:
-            print("Unable to show image")
+            self.__sendPicture()
+        except BaseException as e:
+            print(f"Unable to show image, encountered exception:\n{e}")
 
     def repaint(self):
         """Reshow a picture using subprocess
         """
-        # if (self.showProcess is not None) and self.showProcess.is_alive():
         if (self.showProcessId is not None) and self.subprocessDict[self.showProcessId]['isActive']:
             # subprocess seems to be running, ask it to update image
             try:
-                self.__sendToQueue()
-            except: # BrokenPipeError, queue.Full:
+                self.__sendPicture()
+            except: # BrokenPipeError:
                 # something went wrong, reset and call show
                 self.showProcess = None
                 self.show()
@@ -899,8 +922,7 @@ class Picture:
             self.show()
 
     def pictureTool(self):
-        """Explore a picture using a stand-alone Python script
+        """Explore a picture using a subprocess
         """
         filename = self.__saveInTempFile()
-        # self.__runScript('pictureTool.py', filename, self.title)
         self.__runExploreProcess(filename)
