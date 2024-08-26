@@ -152,9 +152,9 @@ class ExploreApp():
         """Create GUI bar at top of window"""
         # Define fonts
         self.smallFont = font.Font(font='TkDefaultFont').copy()
-        self.smallFont.config(size=10, weight=font.NORMAL)
+        # self.smallFont.config(size=self.smallFont.actual('size'), weight=font.NORMAL)
         self.largeFont = font.Font(font='TkDefaultFont').copy()
-        self.largeFont.config(size=12, weight=font.NORMAL)
+        self.largeFont.config(size=self.smallFont.actual('size') + 2, weight=font.NORMAL)
 
         # main bar at top
         self.infoBar = ttk.Frame(self.frame)
