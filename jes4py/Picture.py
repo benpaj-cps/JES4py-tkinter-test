@@ -1,10 +1,8 @@
 import os, sys
-import tkinter as tk
 import atexit
 import tempfile
-from multiprocessing import Process, SimpleQueue, Pipe
+from multiprocessing import Pipe
 from threading import Thread
-from queue import Empty, Full
 import PIL.ImageDraw, PIL.Image, PIL.ImageTk
 from jes4py import Config
 from jes4py.PixelColor import Pixel, Color
@@ -886,7 +884,7 @@ class Picture:
         """Send picture to "show" process
         
         Note: the connection used is an instance of 
-        multiprocessing.Pipe, which automatically pickles
+        multiprocessing.Connection, which automatically pickles
         objects sent through it.
         """
         pic = Picture(self)
