@@ -94,6 +94,8 @@ class ExploreApp():
     CURSOR_TAG = 'cursor'
     MIN_WINDOW_WIDTH = 350
     MIN_WINDOW_HEIGHT = 0
+    windowingSystem = None
+    cursorAdjustment = 0
     cursorX = 0
     cursorY = 0
     xInputVar = None
@@ -152,7 +154,6 @@ class ExploreApp():
         """Create GUI bar at top of window"""
         # Define fonts
         self.smallFont = font.Font(font='TkDefaultFont').copy()
-        # self.smallFont.config(size=self.smallFont.actual('size'), weight=font.NORMAL)
         self.largeFont = font.Font(font='TkDefaultFont').copy()
         self.largeFont.config(size=self.smallFont.actual('size') + 2, weight=font.NORMAL)
 
@@ -304,6 +305,15 @@ class ExploreApp():
         self.imageCanvas.rowconfigure(0, weight=1)
         self.imageFrame.columnconfigure(0, weight=1)
         self.imageFrame.rowconfigure(0, weight=1)
+        
+        # Ensure cursor symmetry
+        # Figure out which platform we're on to ensure cursor symmetry
+        # See https://tkdocs.com/tutorial/menus.html
+        self.windowingSystem = self.imageCanvas.tk.call('tk', 'windowingsystem')
+        if self.windowingSystem == 'aqua':
+            self.cursorAdjustment = 1
+        else:
+            self.cursorAdjustment = 0
 
     def initZoomMenu(self):
         """Create menu for zooming image"""
@@ -387,11 +397,25 @@ class ExploreApp():
         # Delete previous cursor lines (if any)
         self.imageCanvas.delete(self.CURSOR_TAG)
 
-        # Draw cursor
-        self.imageCanvas.create_line(newX - self.CURSOR_RADIUS, newY, newX + self.CURSOR_RADIUS + 1, newY, width=3, fill='#000000', tags=self.CURSOR_TAG)
-        self.imageCanvas.create_line(newX, newY - self.CURSOR_RADIUS, newX, newY + self.CURSOR_RADIUS + 1, width=3, fill='#000000', tags=self.CURSOR_TAG)
-        self.imageCanvas.create_line(newX - self.CURSOR_RADIUS + 1, newY, newX + self.CURSOR_RADIUS, newY, width=1, fill='#FFFF00', tags=self.CURSOR_TAG)
-        self.imageCanvas.create_line(newX, newY - self.CURSOR_RADIUS + 1, newX, newY + self.CURSOR_RADIUS, width=1, fill='#FFFF00', tags=self.CURSOR_TAG)
+        # Draw cursor:
+        
+
+        self.imageCanvas.create_line(newX - self.CURSOR_RADIUS, newY,
+                                      newX + self.CURSOR_RADIUS + 1 + self.cursorAdjustment, newY,
+                                        width=3, fill='#000000',
+                                          tags=self.CURSOR_TAG)
+        self.imageCanvas.create_line(newX, newY - self.CURSOR_RADIUS,
+                                      newX, newY + self.CURSOR_RADIUS + 1 + self.cursorAdjustment,
+                                        width=3, fill='#000000',
+                                          tags=self.CURSOR_TAG)
+        self.imageCanvas.create_line(newX - self.CURSOR_RADIUS + 1, newY,
+                                      newX + self.CURSOR_RADIUS + self.cursorAdjustment, newY,
+                                        width=1, fill='#FFFF00',
+                                          tags=self.CURSOR_TAG)
+        self.imageCanvas.create_line(newX, newY - self.CURSOR_RADIUS + 1,
+                                      newX, newY + self.CURSOR_RADIUS + self.cursorAdjustment,
+                                        width=1, fill='#FFFF00',
+                                          tags=self.CURSOR_TAG)
 
         # Ensure input fields reflect current cursor position
         self.xInputVar.set(self.cursorX)
