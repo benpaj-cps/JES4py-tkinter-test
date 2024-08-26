@@ -48,8 +48,8 @@ class ExploreProcess(Process):
     def exit(self):
         """Exit the subprocess
         
-        This method exists so that the process can be conveniently
-        terminated from the main process side.
+        This method exists so that the subprocess can be conveniently
+        terminated by the main process.
         """
 
         # Note that self.terminate means to terminate the subprocess
@@ -63,8 +63,11 @@ class ExploreProcess(Process):
 
 class ExploreApp():
     EXIT_CODE = bytes([0])
-    CURSOR_RADIUS = 7
+    CURSOR_RADIUS = 5
     CURSOR_TAG = 'cursor'
+    MIN_WINDOW_WIDTH = 350
+    MIN_WINDOW_HEIGHT = 0
+
 
     def __init__(self, imagePath, imageTitle):
         self.imagePath = imagePath
@@ -72,6 +75,13 @@ class ExploreApp():
         
         # Initialize the Tkinter GUI root window
         self.root = tk.Tk()
+        self.root.title(self.imageTitle)
+
+        self.root.minsize(self.MIN_WINDOW_WIDTH, self.MIN_WINDOW_HEIGHT)
+
+        maxWidth = int(self.root.winfo_screenwidth() * 0.95)
+        maxHeight = int(self.root.winfo_screenheight() * 0.85)
+        self.root.maxsize(maxWidth, maxHeight)
         
         # Coordinates for the pixel selection cursor
         self.cursorX = 0
