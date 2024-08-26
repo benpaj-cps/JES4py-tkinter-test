@@ -200,11 +200,10 @@ class ExploreApp():
         self.yInput.bind('<Return>', self.validateYInput)
 
         # Icons made by Freepik from www.flaticon.com; Modified by Gahngnin Kim
-        # Rescaled by Benjamin Pajunen 20x20px -> 18x18px
         self.rightArrowImagePath = os.path.join(
-            Config.getConfigVal('CONFIG_JES4PY_PATH'), 'images', 'Right2.png')
+            Config.getConfigVal('CONFIG_JES4PY_PATH'), 'images', 'Right.png')
         self.leftArrowImagePath = os.path.join(
-            Config.getConfigVal('CONFIG_JES4PY_PATH'), 'images', 'Left2.png')
+            Config.getConfigVal('CONFIG_JES4PY_PATH'), 'images', 'Left.png')
         self.rightArrowIcon = ImageTk.PhotoImage(file=self.rightArrowImagePath)
         self.leftArrowIcon = ImageTk.PhotoImage(file=self.leftArrowImagePath)
         
