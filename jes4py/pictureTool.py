@@ -307,11 +307,11 @@ class ExploreApp():
         self.imageFrame.rowconfigure(0, weight=1)
         
         # Ensure cursor symmetry
-        # Figure out which platform we're on to ensure cursor symmetry
+        # Figure out which platform we're on.
         # See https://tkdocs.com/tutorial/menus.html
         self.windowingSystem = self.imageCanvas.tk.call('tk', 'windowingsystem')
         if self.windowingSystem == 'aqua':
-            self.cursorAdjustment = 1
+            self.cursorAdjustment = -1
         else:
             self.cursorAdjustment = 0
 
@@ -398,22 +398,20 @@ class ExploreApp():
         self.imageCanvas.delete(self.CURSOR_TAG)
 
         # Draw cursor:
-        
-
         self.imageCanvas.create_line(newX - self.CURSOR_RADIUS, newY,
-                                      newX + self.CURSOR_RADIUS + 1 + self.cursorAdjustment, newY,
+            newX + self.CURSOR_RADIUS + 1 + self.cursorAdjustment, newY,
                                         width=3, fill='#000000',
                                           tags=self.CURSOR_TAG)
         self.imageCanvas.create_line(newX, newY - self.CURSOR_RADIUS,
-                                      newX, newY + self.CURSOR_RADIUS + 1 + self.cursorAdjustment,
+            newX, newY + self.CURSOR_RADIUS + 1 + self.cursorAdjustment,
                                         width=3, fill='#000000',
                                           tags=self.CURSOR_TAG)
         self.imageCanvas.create_line(newX - self.CURSOR_RADIUS + 1, newY,
-                                      newX + self.CURSOR_RADIUS + self.cursorAdjustment, newY,
+            newX + self.CURSOR_RADIUS + self.cursorAdjustment, newY,
                                         width=1, fill='#FFFF00',
                                           tags=self.CURSOR_TAG)
         self.imageCanvas.create_line(newX, newY - self.CURSOR_RADIUS + 1,
-                                      newX, newY + self.CURSOR_RADIUS + self.cursorAdjustment,
+            newX, newY + self.CURSOR_RADIUS + self.cursorAdjustment,
                                         width=1, fill='#FFFF00',
                                           tags=self.CURSOR_TAG)
 
